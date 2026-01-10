@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  avatar    String?
+  signature String? @db.Text
+  expansionSettings Json? // Stores settings for all expansions { "core-signature": { ... } }
+  emails    Email[]
+  labels    Label[]
+  accounts  Account[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Email {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId   String       @unique
+  from        String
+  to          String
+  subject     String?
+  snippet     String?
+  htmlKey     String?
+  textKey     String?
+  rawKey      String?
+  createdAt   DateTime     @default(now())
+  read        Boolean      @default(false)
+  folder      String       @default("inbox")
+  status      String       @default("received")
+  starred     Boolean      @default(false)
+  cleanTo     String?
+  scheduledAt DateTime?
+  smartReplies Json?
+  attachments Attachment[]
+  events      EmailEvent[]
+  labels      Label[]      @relation("EmailToLabel")
+
+  @@index([to])
+  @@index([folder])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  emailId   String?
+  filename  String
+  mimeType  String
+  size      Int
+  key       String
+  createdAt DateTime @default(now())
+  draftId   String?
+  draft     Draft?   @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  email     Email?   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+}
+
+model EmailEvent {
+  id            String   @id @default(cuid())
+  emailId       String?
+  resendEmailId String?
+  type          String
+  data          Json?
+  createdAt     DateTime @default(now())
+  email         Email?   @relation(fields: [emailId], references: [id])
+
+  @@index([resendEmailId])
+  @@index([type])
+}
+
+model Draft {
+  id          String       @id @default(cuid())
+  to          String?
+  subject     String?
+  body        String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  from        String
+  bcc         String?
+  cc          String?
+  attachments Attachment[]
+
+  @@index([updatedAt])
+  @@index([from])
+}
+
+model Label {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#6366f1")
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aliasSuffix String?
+  filterRegex String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  emails      Email[]  @relation("EmailToLabel")
+
+  @@unique([userId, name])
+  @@index([userId])
+}
