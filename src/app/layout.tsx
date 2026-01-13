@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import SessionProvider from '@/components/SessionProvider'
+import { SessionProvider } from '@/components/SessionProvider'
 import { ComposeProvider } from '@/contexts/ComposeContext'
 import { CacheProvider } from '@/contexts/CacheContext'
 import { OfflineProvider } from '@/contexts/OfflineContext'

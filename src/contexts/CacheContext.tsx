@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useRef, useCallback, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/components/SessionProvider';
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
 interface BloomxDB extends DBSchema {
