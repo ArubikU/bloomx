@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 import { ensureCoreExpansions, expansionRegistry } from '@/lib/expansions/server';
 import { ExpansionTrigger } from '@/lib/expansions/types';
 
 export async function GET(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const user = await getCurrentUser();
+    if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -36,8 +35,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const user = await getCurrentUser();
+    if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -66,8 +65,8 @@ export async function POST(req: NextRequest) {
         // Context construction with payload
         // Context construction with payload
         const context: any = {
-            userId: (session.user as any).id,
-            userEmail: session.user.email,
+            userId: user.id,
+            where: { email: user.email },
             ...body // Flatten body into context
         };
 

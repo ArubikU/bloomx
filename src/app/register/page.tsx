@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Mail } from 'lucide-react';
+import { Loader2, Mail, Book } from 'lucide-react';
 import { brand } from '@/lib/brand';
 
 export default function Register() {
@@ -49,6 +49,10 @@ export default function Register() {
                 <div className="relative z-20 flex items-center gap-2 text-lg font-medium">
                     {brand.logo ? <img src={brand.logo} className="h-6 w-6 object-contain" alt={brand.name} /> : <Mail className="h-6 w-6" />}
                     {brand.name}
+                    <Link href="/docs" className="ml-6 text-sm font-normal text-zinc-300 hover:text-white transition-colors flex items-center gap-1 border-l border-zinc-600 pl-6">
+                        <Book className="h-4 w-4" />
+                        Docs
+                    </Link>
                 </div>
                 <div className="relative z-20 mt-auto">
                     <blockquote className="space-y-2">
@@ -61,7 +65,18 @@ export default function Register() {
             </div>
 
             {/* Right Side - Form */}
-            <div className="lg:p-8">
+            <div className="relative flex h-full flex-col justify-center p-8 lg:p-8">
+                {/* Mobile Brand Header */}
+                <div className="mb-10 flex flex-col items-center space-y-2 lg:hidden">
+                    <div className="flex items-center gap-2 text-xl font-bold text-primary">
+                        {brand.logo ? <img src={brand.logo} className="h-8 w-8 object-contain" alt={brand.name} /> : <Mail className="h-8 w-8" />}
+                        {brand.name}
+                    </div>
+                    <Link href="/docs" className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+                        <Book className="h-4 w-4" />
+                        Docs
+                    </Link>
+                </div>
                 <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
                     <div className="flex flex-col space-y-2 text-center">
                         <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>

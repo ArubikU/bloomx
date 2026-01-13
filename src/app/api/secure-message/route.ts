@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
 import { uploadToStorage, getSignedDownloadUrl } from '@/lib/storage'; // Assuming this exists per services.ts reference
 import { encrypt } from '@/lib/encryption';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const user = await getCurrentUser();
+    if (!user?.email) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -20,7 +19,7 @@ export async function POST(req: NextRequest) {
         const payload = JSON.stringify({
             subject,
             content,
-            sender: session.user.email,
+            sender: user.email,
             createdAt: new Date().toISOString()
         });
 

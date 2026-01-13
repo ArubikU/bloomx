@@ -3,7 +3,7 @@ import { useExpansions } from '@/hooks/useExpansions';
 import { ClientExpansion } from '@/lib/expansions/client/types';
 import { Paperclip, Loader2, X, Upload, File as FileIcon, LogIn, List, Grid, LayoutGrid } from 'lucide-react';
 import { useExpansionUI } from '@/contexts/ExpansionUIContext';
-import { signIn } from 'next-auth/react';
+import { signIn } from '@/components/SessionProvider';
 import { SiGoogledrive } from "react-icons/si";
 import { cn } from '@/lib/utils';
 

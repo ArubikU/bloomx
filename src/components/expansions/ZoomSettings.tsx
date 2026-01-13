@@ -19,6 +19,12 @@ export function ZoomSettings({ settings, onSave, saving }: ZoomSettingsProps) {
     const [zoomClientSecret, setZoomClientSecret] = useState(settings?.zoomClientSecret || '');
     const [showSecret, setShowSecret] = useState(false);
 
+    const handleConnect = () => {
+        // Use generic signIn which redirects to /api/auth/zoom
+        // Note: verify import of signIn from @/components/SessionProvider
+        window.location.href = '/api/auth/zoom';
+    };
+
     const handleSave = async () => {
         try {
             await onSave({ zoomAccountId, zoomClientId, zoomClientSecret });
@@ -30,6 +36,27 @@ export function ZoomSettings({ settings, onSave, saving }: ZoomSettingsProps) {
 
     return (
         <div className="space-y-4">
+            <div className="p-4 bg-muted/50 rounded-lg flex items-center justify-between">
+                <div>
+                    <h4 className="text-sm font-medium">Connect Zoom Account</h4>
+                    <p className="text-xs text-muted-foreground">Link your account for easier access</p>
+                </div>
+                <button
+                    onClick={handleConnect}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
+                >
+                    Connect
+                </button>
+            </div>
+            <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or configure manually</span>
+                </div>
+            </div>
+
             <div className="grid gap-2">
                 <label className="text-sm font-medium">Zoom Account ID</label>
                 <input

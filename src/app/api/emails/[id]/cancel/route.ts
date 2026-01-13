@@ -1,7 +1,7 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -10,8 +10,9 @@ export async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const user = await getCurrentUser();
+
+    if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -30,12 +31,12 @@ export async function POST(
 
         // Verify ownership (simple check on From email matching session user)
         // Adjust logic if you have strict user IDs
-        if (!email.from.includes(session.user.email)) {
+        if (!email.from.includes(user.email)) {
             // Fallback: check if the user is the sender (parsed)
             // For now assuming if you can access it, you can cancel it (since we filter by folder usually)
             // But strict check:
             const senderEmail = email.from.match(/<(.+)>/)?.[1] || email.from;
-            if (senderEmail !== session.user.email) {
+            if (senderEmail !== user.email) {
                 // Allow if alias?
             }
         }
@@ -65,8 +66,8 @@ export async function POST(
         // passing `html` to Resend. 
         // Wait, did I store the body in `Email`? 
         // The `Email` model has: subject, snippet, cleanTo, to, from. It does NOT have the full body content directly unless `htmlKey` is used.
-        // But `POST /api/emails` saved `htmlKey: null`. 
-        // CHECK: In `POST /api/emails`, I see: `htmlKey: null`. Attempting to retrieve content??
+        // But `POST / api / emails` saved `htmlKey: null`. 
+        // CHECK: In `POST / api / emails`, I see: `htmlKey: null`. Attempting to retrieve content??
         // If I can't retrieve the content, I can't make a draft.
         // RETROACTIVE FIX: We need to store the body instructions or content in the Email model if we want to "Edit" it later, 
         // OR rely on Resend to give it back? Resend `emails.get` retrieves details.

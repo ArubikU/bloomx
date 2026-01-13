@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
     try {
         const { email, password, name, key } = await req.json();
 
-        if (key !== env.REGISTRATION_SECRET) {
+        if (key !== env.REGISTRATION_KEY) {
             return NextResponse.json({ error: 'Invalid registration secret' }, { status: 403 });
         }
 

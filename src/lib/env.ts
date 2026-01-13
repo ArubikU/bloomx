@@ -4,7 +4,7 @@ const envSchema = z.object({
     // Core
     DATABASE_URL: z.string().min(1, "Database URL is required"),
     NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
-    REGISTRATION_SECRET: z.string().default("dev-secret"),
+    REGISTRATION_KEY: z.string().default("dev-secret"),
 
     // Email Service (Resend)
     RESEND_API_KEY: z.string().min(1, "Resend API Key is required"),
@@ -31,6 +31,8 @@ const envSchema = z.object({
     // Auth Providers (Optional)
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
+    NEXTAUTH_SECRET: z.string().min(1, "NEXTAUTH_SECRET is required"),
+    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 
 export const env = envSchema.parse(process.env);

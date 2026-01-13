@@ -1,18 +1,19 @@
+
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
+        where: { email: currentUser.email },
         select: { id: true }
     });
 
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
                     if (newEmails > 0) {
                         lastCheck = new Date();
                         const data = JSON.stringify({ type: 'NEWMESSAGE', count: newEmails });
-                        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+                        controller.enqueue(encoder.encode(`data: ${data} \n\n`));
                     }
                 } catch (e) {
                     console.error('SSE Error:', e);
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
                     return;
                 }
                 const data = JSON.stringify({ type: 'PING' });
-                controller.enqueue(encoder.encode(`: ${data}\n\n`)); // Comment style keep-alive
+                controller.enqueue(encoder.encode(`: ${data} \n\n`)); // Comment style keep-alive
             }, 15000);
 
             req.signal.addEventListener('abort', () => {

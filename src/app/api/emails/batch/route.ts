@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 import { prisma } from '@/lib/prisma';
 
 export async function PATCH(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        const user = await getCurrentUser();
+        if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -43,15 +42,15 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        const user = await getCurrentUser();
+        if (!user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const body = await req.json();
         const { ids } = body;
 
-        console.log(`[BatchDelete] User: ${session.user.email}`);
+        console.log(`[BatchDelete] User: ${user.email}`);
 
         if (!Array.isArray(ids) || ids.length === 0) {
             return NextResponse.json({ error: 'Invalid IDs' }, { status: 400 });
@@ -61,7 +60,7 @@ export async function DELETE(req: NextRequest) {
 
         // 1. Fetch emails to get storage keys
         const emails = await prisma.email.findMany({
-            where: { id: { in: ids } },
+            where: { id: { in: ids }, AND: { userId: user.id } },
             include: { attachments: true }
         });
         console.log("BATCH DELETE FOUND:", emails.length);

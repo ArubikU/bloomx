@@ -58,9 +58,15 @@ const GiphySelector = ({ context, args }: { context: ClientExpansionContext, arg
             context.execute();
         }
 
-        context.onInsertBody?.(
-            `<div contenteditable="false" style="margin: 12px 0;"><img src="${src}" alt="${gif.title}" style="max-width:100%;border-radius:8px;box-shadow: 0 1px 3px rgba(0,0,0,0.1);" /></div><br/>`
-        );
+        if (context.insertBody) {
+            context.insertBody(
+                `<div contenteditable="false" style="margin: 12px 0;"><img src="${src}" alt="${gif.title}" style="max-width:100%;border-radius:8px;box-shadow: 0 1px 3px rgba(0,0,0,0.1);" /></div><br/>`
+            );
+        } else if (context.appendBody) {
+            context.appendBody(
+                `<div contenteditable="false" style="margin: 12px 0;"><img src="${src}" alt="${gif.title}" style="max-width:100%;border-radius:8px;box-shadow: 0 1px 3px rgba(0,0,0,0.1);" /></div><br/>`
+            );
+        }
 
         if (!context.execute) {
             context.onClose?.();
@@ -150,12 +156,19 @@ export const GiphyToolbarButton = ({ context }: { context: ClientExpansionContex
     const buttonRef = useRef<HTMLButtonElement>(null);
 
     const handleOpen = () => {
-        if (!buttonRef.current || !context.openPopover) return;
-        const rect = buttonRef.current.getBoundingClientRect();
+        if (!context.openPopover && !context.openOverlay) return;
 
-        context.openPopover(rect, (
-            <GiphySelector context={context} />
-        ), { width: 320, header: false });
+        // Mobile check
+        const isMobile = window.innerWidth < 640;
+
+        if (isMobile && context.openOverlay) {
+            context.openOverlay(<GiphySelector context={context} />);
+        } else if (buttonRef.current && context.openPopover) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            context.openPopover(rect, (
+                <GiphySelector context={context} />
+            ), { width: 320, header: false });
+        }
     };
 
     return (

@@ -1,28 +1,27 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
 
 export async function GET() {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const user = await getCurrentUser();
+    if (!user?.email) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const email = session.user.email;
+    const email = user.email;
 
     try {
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
+        const dbUser = await prisma.user.findUnique({
+            where: { email: user.email },
             select: { id: true }
         });
-        if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
         const [inboxCount, draftsCount, sentCount, trashCount, junkCount, archiveCount] = await Promise.all([
             // Inbox: To me, not deleted, not archived, not junk
             prisma.email.count({
                 where: {
-                    userId: user.id,
+                    userId: dbUser.id,
                     folder: 'inbox',
                 }
             }),

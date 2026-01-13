@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        const user = await getCurrentUser();
+        if (!user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -21,7 +20,7 @@ export async function POST(req: NextRequest) {
             const result = await prisma.draft.deleteMany({
                 where: {
                     id: { in: ids },
-                    from: session.user.email // Security: Ensure ownership
+                    from: user.email // Security: Ensure ownership
                 }
             });
             return NextResponse.json({ count: result.count });

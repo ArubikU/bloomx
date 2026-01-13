@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 
 import { encryptObject, decryptObject } from '@/lib/encryption';
 
 export async function GET(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const currentUser = await getCurrentUser();
+    if (!currentUser?.email) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
         const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
+            where: { email: currentUser.email },
             select: { id: true, signature: true, expansionSettings: true }
         });
 
@@ -43,8 +42,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const currentUser = await getCurrentUser();
+    if (!currentUser?.email) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -71,7 +70,7 @@ export async function POST(req: NextRequest) {
         }
 
         await prisma.user.update({
-            where: { email: session.user.email },
+            where: { email: currentUser.email },
             data
         });
 

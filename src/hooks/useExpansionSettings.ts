@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useCache } from '@/contexts/CacheContext';
 
 export function useExpansionSettings(expansionId: string) {
-    const { getData, setData } = useCache();
+    const { getData, setData, subscribe } = useCache();
     const [settings, setSettings] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -47,7 +47,15 @@ export function useExpansionSettings(expansionId: string) {
         if (!loadedRef.current) {
             loadSettings();
         }
-    }, [loadSettings]);
+
+        // Subscribe to cache changes to keep settings in sync
+        const unsubscribe = subscribe(() => {
+            // We force a reload when cache changes
+            loadSettings(true);
+        });
+
+        return () => unsubscribe();
+    }, [loadSettings, subscribe]);
 
     const saveSettings = useCallback(async (newSettings: any) => {
         try {

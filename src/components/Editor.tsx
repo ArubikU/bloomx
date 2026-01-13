@@ -185,7 +185,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({ value, onChange, 
             },
         },
         onUpdate: ({ editor }) => {
-            onChange(editor.getHTML());
+            const content = editor.getHTML();
+            lastValueRef.current = content;
+            onChange(content);
 
             if (simple) return;
 

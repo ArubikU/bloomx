@@ -1,4 +1,4 @@
-import { ClientExpansion, ClientExpansionMountPoint } from './types';
+import { ClientExpansion, ClientExpansionMountPoint, ExpansionPriority } from './types';
 
 class ClientExpansionRegistry {
     private expansions: Map<string, ClientExpansion> = new Map();
@@ -7,8 +7,8 @@ class ClientExpansionRegistry {
         this.expansions.set(expansion.id, expansion);
     }
 
-    getByMountPoint(mountPoint: ClientExpansionMountPoint): Array<{ id: string, Component?: React.ComponentType<any>, execute?: any, title?: string, icon?: any, slashCommand?: { key: string, description: string } }> {
-        const results: Array<{ id: string, Component?: React.ComponentType<any>, execute?: any, title?: string, icon?: any, slashCommand?: { key: string, description: string } }> = [];
+    getByMountPoint(mountPoint: ClientExpansionMountPoint): Array<{ id: string, Component?: React.ComponentType<any>, execute?: any, title?: string, icon?: any, slashCommand?: { key: string, description: string }, routePath?: string, handler?: any, priority?: ExpansionPriority }> {
+        const results: Array<{ id: string, Component?: React.ComponentType<any>, execute?: any, title?: string, icon?: any, slashCommand?: { key: string, description: string }, routePath?: string, handler?: any, priority?: ExpansionPriority }> = [];
 
         const allExpansions = Array.from(this.expansions.values());
         for (let i = 0; i < allExpansions.length; i++) {
@@ -22,7 +22,10 @@ class ClientExpansionRegistry {
                     execute: mount.execute,
                     title: mount.title,
                     icon: mount.icon,
-                    slashCommand: mount.slashCommand
+                    slashCommand: mount.slashCommand,
+                    routePath: mount.routePath,
+                    handler: mount.handler,
+                    priority: mount.priority
                 });
             }
         }

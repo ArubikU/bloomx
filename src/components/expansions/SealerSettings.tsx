@@ -49,9 +49,17 @@ export function SealerSettings({ settings, onSave }: SealerSettingsProps) {
     const [generating, setGenerating] = useState(false);
     const [newName, setNewName] = useState('');
 
+    // Sync from props (external source)
+    useEffect(() => {
+        if (settings?.sealers) {
+            setSealers(settings.sealers);
+        }
+    }, [settings?.sealers]);
+
+    // Sync to parent (save)
     useEffect(() => {
         onSave({ sealers });
-    }, [sealers]);
+    }, [sealers, onSave]);
 
     const createSealer = async () => {
         if (!newName) return toast.error('Enter a name for the sealer');

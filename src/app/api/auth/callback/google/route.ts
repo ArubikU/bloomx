@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { setSessionCookie } from "@/lib/session";
+
+export async function GET(req: NextRequest) {
+    const code = req.nextUrl.searchParams.get("code");
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+    const REDIRECT_URI = `${process.env.NEXTAUTH_URL}/api/auth/callback/google`;
+
+    if (!code || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+        return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/login?error=ConfigurationError`);
+    }
+
+    try {
+        // 1. Exchange code for tokens
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                code,
+                client_id: GOOGLE_CLIENT_ID,
+                client_secret: GOOGLE_CLIENT_SECRET,
+                redirect_uri: REDIRECT_URI,
+                grant_type: "authorization_code",
+            }),
+        });
+
+        const tokens = await tokenResponse.json();
+
+        if (tokens.error) {
+            console.error("Google Token Error:", tokens.error);
+            return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/login?error=GoogleAuthFailed`);
+        }
+
+        // 2. Get User Profile
+        const profileResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+
+        const profile = await profileResponse.json();
+
+        if (!profile.email) {
+            return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/login?error=NoEmail`);
+        }
+
+        // 3. Find or Create User
+        let user = await prisma.user.findUnique({
+            where: { email: profile.email },
+        });
+
+        if (!user) {
+            user = await prisma.user.create({
+                data: {
+                    email: profile.email,
+                    name: profile.name,
+                    avatar: profile.picture,
+                    password: "", // No password for OAuth users
+                },
+            });
+        }
+
+        // 4. Link Account (Optional, but good for tracking)
+        await prisma.account.upsert({
+            where: {
+                provider_providerAccountId: {
+                    provider: "google",
+                    providerAccountId: profile.id,
+                },
+            },
+            create: {
+                userId: user.id,
+                type: "oauth",
+                provider: "google",
+                providerAccountId: profile.id,
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                id_token: tokens.id_token,
+                scope: tokens.scope,
+                token_type: tokens.token_type,
+                expires_at: Math.floor(Date.now() / 1000 + tokens.expires_in),
+            },
+            update: {
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                id_token: tokens.id_token,
+                expires_at: Math.floor(Date.now() / 1000 + tokens.expires_in),
+            },
+        });
+
+        // 5. Create Session
+        await setSessionCookie({
+            sub: user.id,
+            email: user.email,
+            name: user.name,
+        });
+
+        return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard`);
+
+    } catch (error) {
+        console.error("Google Callback Error:", error);
+        return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/login?error=ServerAuthError`);
+    }
+}

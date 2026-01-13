@@ -1,12 +1,13 @@
+
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 import { uploadToStorage, getSignedDownloadUrl } from '@/lib/storage';
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        const user = await getCurrentUser();
+
+        if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
         const timestamp = Date.now();
         // Sanitize filename
         const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const key = `attachments/${session.user.email}/${timestamp}-${safeFilename}`;
+        const key = `attachments/${user.email}/${timestamp}-${safeFilename}`;
 
         await uploadToStorage(key, buffer, file.type);
 

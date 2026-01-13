@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const user = await getCurrentUser();
+
+    if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         // Check ownership? existing code implies userId handling is messy but let's assume we can query by ID
         // Ideally we check User ID match.
-        const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
-        if (!user || user.id !== email.userId) {
+        const existingUser = await prisma.user.findUnique({ where: { email: user.email }, select: { id: true } });
+        if (!existingUser || existingUser.id !== email.userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

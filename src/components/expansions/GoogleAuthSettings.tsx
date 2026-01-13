@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn } from '@/components/SessionProvider';
 import { Loader2, CheckCircle2, AlertCircle, LogOut, LogIn, RefreshCcw } from 'lucide-react';
 
 export function GoogleAuthSettings({ settings, onSave }: { settings: any, onSave: (s: any) => void }) {

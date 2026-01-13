@@ -35,7 +35,7 @@ Bloomx is not just a mail client. It's a **programmable messaging infrastructure
 
 ## 📦 One-Click Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Farubiku%2Fbloomx&env=DATABASE_URL,RESEND_API_KEY,REGISTRATION_SECRET,AI_KEY)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Farubiku%2Fbloomx&env=DATABASE_URL,RESEND_API_KEY,REGISTRATION_KEY,AI_KEY)
 
 ## 🔧 Configuration
 
@@ -44,7 +44,7 @@ Bloomx is configured entirely via Environment Variables. See `.env.example` for 
 ### Required
 - `DATABASE_URL`: Connection string for PostgreSQL.
 - `RESEND_API_KEY`: API Key from Resend.com.
-- `REGISTRATION_SECRET`: Secret token to allow new user registration.
+- `REGISTRATION_KEY`: Secret token to allow new user registration.
 
 ### Storage (S3 Compatible, B2 Compatible)
 - `S3_ENDPOINT` || `B2_ENDPOINT`

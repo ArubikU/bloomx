@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession, signOut } from '@/components/SessionProvider';
 import { X, Loader2, Camera, Lock, User, LogOut, PenTool, Puzzle, Grid } from 'lucide-react';
+import { useCache } from '@/contexts/CacheContext';
 import { cn } from '@/lib/utils';
 import { Editor } from './Editor';
 import { clientExpansionRegistry } from '@/lib/expansions/client/registry';
@@ -14,12 +15,13 @@ interface SettingsModalProps {
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
     const { data: session, update: updateSession } = useSession();
+    const { setData } = useCache();
 
     // Reset state when opening
     useEffect(() => {
         if (open) {
             setName(session?.user?.name || '');
-            setAvatar(session?.user?.image || '');
+            setAvatar(session?.user?.avatar || '');
             setMessage(null);
 
             // Load Settings
@@ -104,6 +106,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 body: JSON.stringify({ expansionSettings })
             });
 
+            // Update Cache
+            await setData('system:expansion-settings-full', expansionSettings);
+
             const data = await res.json();
 
             if (!res.ok) {
@@ -111,14 +116,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             }
 
             // Update session explicitly
-            await updateSession({
-                ...session,
-                user: {
-                    ...session?.user,
-                    name: data.user.name,
-                    image: data.user.avatar
-                }
-            });
+            await updateSession();
 
             setMessage({ type: 'success', text: 'Settings updated successfully' });
             // Clear password fields
@@ -200,10 +198,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                                         <Component
                                             settings={currentSettings}
                                             onSave={(newSettings: any) => {
-                                                setExpansionSettings({
-                                                    ...expansionSettings,
+                                                setExpansionSettings((prev: any) => ({
+                                                    ...prev,
                                                     [tab.id]: newSettings
-                                                });
+                                                }));
                                             }}
                                         />
                                     </div>

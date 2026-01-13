@@ -11,18 +11,20 @@ import { cn } from '@/lib/utils';
 import { ClientExpansions } from '@/lib/expansions/client/renderer';
 import { ensureClientExpansions } from '@/lib/expansions/client/core-expansions';
 import { CronTrigger } from '@/components/CronTrigger';
-// Init
-ensureClientExpansions();
 import { useCompose } from '@/contexts/ComposeContext';
 import { useCache } from '@/contexts/CacheContext';
+import { useSession } from '@/components/SessionProvider';
 import { toast } from 'sonner';
 import { SettingsModal } from './SettingsModal';
+// Init
+ensureClientExpansions();
 
 interface SidebarProps {
     onClose?: () => void;
 }
 
 export function Sidebar({ onClose }: SidebarProps) {
+    const { status } = useSession();
     const searchParams = useSearchParams();
     const currentFolder = searchParams.get('folder') || 'inbox';
     const { openCompose } = useCompose();
@@ -106,20 +108,24 @@ export function Sidebar({ onClose }: SidebarProps) {
             }
         }
 
-        loadData();
+        if (status === 'authenticated') {
+            loadData();
+        }
 
         // Subscription for immediate updates
         const unsubscribe = subscribe(() => {
-            loadData();
+            if (status === 'authenticated') loadData();
         });
 
         // Poll every 30s
-        const interval = setInterval(loadData, 30000);
+        const interval = setInterval(() => {
+            if (status === 'authenticated') loadData();
+        }, 30000);
         return () => {
             clearInterval(interval);
             unsubscribe();
         };
-    }, [getData, setData, subscribe]);
+    }, [getData, setData, subscribe, status]);
 
     const handleCreateLabel = async () => {
         if (!newLabelName.trim()) return;
@@ -341,9 +347,9 @@ export function Sidebar({ onClose }: SidebarProps) {
 }
 
 function UserProfileAvatar() {
-    const { data: session } = require('next-auth/react').useSession();
-    if (session?.user?.image) {
-        return <img src={session.user.image} alt="Avatar" className="h-9 w-9 rounded-full object-cover border border-border" />;
+    const { data: session } = useSession();
+    if (session?.user?.avatar) {
+        return <img src={session.user.avatar} alt="Avatar" className="h-9 w-9 rounded-full object-cover border border-border" />;
     }
     return (
         <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white font-medium text-xs">
@@ -353,7 +359,7 @@ function UserProfileAvatar() {
 }
 
 function UserProfileDisplay() {
-    const { data: session } = require('next-auth/react').useSession();
+    const { data: session } = useSession();
     if (!session?.user) return null;
     return (<div className="flex flex-col overflow-hidden">
         <span className="text-sm font-medium truncate">{session.user.name || 'User'}</span>

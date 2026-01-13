@@ -15,9 +15,17 @@ export function MailGroupsSettings({ settings, onSave }: MailGroupsSettingsProps
         settings?.groups || []
     );
 
+    // Sync from props (external source)
+    useEffect(() => {
+        if (settings?.groups) {
+            setGroups(settings.groups);
+        }
+    }, [settings?.groups]);
+
+    // Sync to parent (save)
     useEffect(() => {
         onSave({ groups });
-    }, [groups]);
+    }, [groups, onSave]);
 
     const addGroup = () => {
         setGroups([...groups, { name: '@team', emails: '' }]);

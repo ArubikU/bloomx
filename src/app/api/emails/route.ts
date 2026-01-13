@@ -1,8 +1,8 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { resend } from '@/lib/resend';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 import { uploadToStorage } from '@/lib/storage';
 
 export async function GET(req: NextRequest) {
@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
     const limit = 20;
     const skip = (page - 1) * limit;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Ensure core expansions are registered
     // We cannot import directly at top level if registry uses 'require'? 
@@ -24,15 +24,6 @@ export async function GET(req: NextRequest) {
     // server.ts uses imports.
     const { ensureCoreExpansions, expansionRegistry } = await import('@/lib/expansions/server');
     ensureCoreExpansions();
-
-
-    // Fetch User ID
-    const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true }
-    });
-
-    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     // Lazy Unsnooze: Check for snoozed emails that need to wake up
     // We do this before fetching to ensure data is consistent
@@ -111,7 +102,7 @@ export async function GET(req: NextRequest) {
         } else if (!q) {
             // Only filter by folder if no label is selected and not searching globally
             // (or maybe search should be within folder? Usually Gmail global search ignores folder unless specified)
-            // Let's make search global (ignore folder) if q is present, unless we want "in:sent" etc support later.
+            // Let's make search global (ignore folder) if q is present.
             // For now: Global search if q present.
             if (folder) {
                 whereObj.AND.push({ folder });
@@ -136,9 +127,9 @@ export async function GET(req: NextRequest) {
             }
         });
 
-        console.log(`[GET /api/emails] Folder: ${folder}, Q: ${q}, Found: ${emails.length}`);
+        console.log(`[GET / api / emails] Folder: ${folder}, Q: ${q}, Found: ${emails.length} `);
         if (folder === 'trash') {
-            console.log(`[GET /api/emails] Trash IDs:`, emails.map(e => e.id));
+            console.log(`[GET / api / emails] Trash IDs: `, emails.map(e => e.id));
         }
 
         const count = await prisma.email.count({ where: whereObj });
@@ -150,8 +141,9 @@ export async function GET(req: NextRequest) {
     }
 }
 export async function POST(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const sessionUser = await getCurrentUser();
+
+    if (!sessionUser) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -160,8 +152,8 @@ export async function POST(req: NextRequest) {
         const { to, subject, html, text, from, cc, bcc, attachments, scheduledAt } = body;
 
         // Use authenticated user's credentials
-        let senderName = session.user.name || 'User';
-        let senderEmail = session.user.email;
+        let senderName = sessionUser.name || 'User';
+        let senderEmail = sessionUser.email;
 
         const user = await prisma.user.findUnique({
             where: { email: senderEmail },
@@ -174,9 +166,9 @@ export async function POST(req: NextRequest) {
         if (from) {
             // ... existing checks ...
             const fromEmail = from.split('@')[0];
-            const sessionEmail = session.user.email.split('@')[0];
+            const sessionEmail = sessionUser.email.split('@')[0];
             //check the domain is the same
-            if (from.split('@')[1] !== session.user.email.split('@')[1]) {
+            if (from.split('@')[1] !== sessionUser.email.split('@')[1]) {
                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
             }
             if (fromEmail !== sessionEmail) {
@@ -188,7 +180,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const formattedFrom = `${senderName} <${senderEmail}>`;
+        const formattedFrom = `${senderName} <${senderEmail} > `;
 
         // ----------------------------------------------------
         // MIDDLEWARE: Pre-Send Hooks
@@ -207,7 +199,7 @@ export async function POST(req: NextRequest) {
 
             const context = {
                 userId: user.id,
-                userEmail: session.user.email,
+                userEmail: sessionUser.email,
                 emailContent: html || text || '',
                 subject: subject,
                 to: to
@@ -278,12 +270,12 @@ export async function POST(req: NextRequest) {
         let textKey = null;
 
         if (finalHtml) {
-            htmlKey = `sent/${session.user.email}/${timestamp}-${safeSubject}.html`;
+            htmlKey = `sent / ${sessionUser.email}/${timestamp}-${safeSubject}.html`;
             await uploadToStorage(htmlKey, Buffer.from(finalHtml), 'text/html');
         }
 
         if (finalText) {
-            textKey = `sent/${session.user.email}/${timestamp}-${safeSubject}.txt`;
+            textKey = `sent/${sessionUser.email}/${timestamp}-${safeSubject}.txt`;
             await uploadToStorage(textKey, Buffer.from(finalText), 'text/plain');
         }
 
@@ -336,7 +328,7 @@ export async function POST(req: NextRequest) {
 
             const context = {
                 userId: user.id,
-                userEmail: session.user.email,
+                userEmail: sessionUser.email,
                 emailId: email.id,
                 sentEmail: email
             };

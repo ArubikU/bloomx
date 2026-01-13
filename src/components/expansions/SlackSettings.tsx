@@ -15,12 +15,36 @@ export function SlackSettings({ settings, onSave, saving }: SlackSettingsProps) 
     const [slackToken, setSlackToken] = useState(settings?.slackToken || '');
     const [showKey, setShowKey] = useState(false);
 
+    const handleConnect = () => {
+        window.location.href = '/api/auth/slack';
+    };
+
     const handleSave = async () => {
         await onSave({ slackToken });
     };
 
     return (
         <div className="space-y-4">
+            <div className="p-4 bg-muted/50 rounded-lg flex items-center justify-between">
+                <div>
+                    <h4 className="text-sm font-medium">Connect Slack Workspace</h4>
+                    <p className="text-xs text-muted-foreground">Authorize the bot</p>
+                </div>
+                <button
+                    onClick={handleConnect}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
+                >
+                    Connect
+                </button>
+            </div>
+            <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or configure manually</span>
+                </div>
+            </div>
             <div className="grid gap-2">
                 <label className="text-sm font-medium">Slack Bot User OAuth Token</label>
                 <div className="relative">

@@ -17,12 +17,18 @@ export const MailGroupsClientExpansion = ({ context }: { context: ClientExpansio
 
         const rawGroups = settings?.groups || [];
         const groupMap: Record<string, string[]> = {};
-        rawGroups.forEach((g: any) => {
-            if (g.name && g.emails) {
-                const emails = g.emails.split(',').map((e: string) => e.trim()).filter(Boolean);
-                groupMap[g.name.toLowerCase()] = emails;
-            }
-        });
+
+        if (Array.isArray(rawGroups)) {
+            rawGroups.forEach((g: any) => {
+                if (g && g.name && typeof g.name === 'string' && g.emails) {
+                    const emails = g.emails.split(',').map((e: string) => e.trim()).filter(Boolean);
+                    if (emails.length > 0) {
+                        groupMap[g.name.trim().toLowerCase()] = emails;
+                    }
+                }
+            });
+        }
+
         setGroups(groupMap);
         setLoaded(true);
     }, [settings, loading]);

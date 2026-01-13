@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
 // Get all drafts
+// Get all drafts for the authenticated user
 export async function GET() {
     try {
+        const user = await getCurrentUser();
+        if (!user?.email) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const drafts = await prisma.draft.findMany({
+            where: { from: user.email },
             orderBy: { updatedAt: 'desc' },
             take: 50,
             include: { attachments: true }
@@ -21,8 +27,8 @@ export async function GET() {
 // Create or update draft
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        const user = await getCurrentUser();
+        if (!user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -41,7 +47,10 @@ export async function POST(req: NextRequest) {
             // First, update basic fields
             try {
                 draft = await prisma.draft.update({
-                    where: { id },
+                    where: {
+                        id,
+                        from: user.email // Ensure ownership
+                    },
                     data: {
                         to: to || null,
                         cc: cc || null,
@@ -80,7 +89,7 @@ export async function POST(req: NextRequest) {
             // Create new draft
             draft = await prisma.draft.create({
                 data: {
-                    from: session.user.email,
+                    from: user.email,
                     to: to || null,
                     cc: cc || null,
                     bcc: bcc || null,

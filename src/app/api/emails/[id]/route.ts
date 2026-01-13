@@ -1,15 +1,15 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from "@/lib/session";
 import { getFromStorage } from '@/lib/storage';
 
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> } // Treat params as a promise
 ) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await getCurrentUser();
+    if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     try {
         const { id } = await params;
@@ -33,7 +33,7 @@ export async function GET(
             if (storedHtml) content = storedHtml;
         } else if (email.textKey) {
             const storedText = await getFromStorage(email.textKey);
-            if (storedText) content = `<pre>${storedText}</pre>`;
+            if (storedText) content = `< pre > ${storedText} </pre>`;
         }
 
         // Generate signed URLs for attachments
@@ -68,8 +68,8 @@ export async function PATCH(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> } // Treat params as a promise
 ) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await getCurrentUser();
+    if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     try {
         const { id } = await params; // Await the params

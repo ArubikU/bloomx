@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
 import { ensureCoreExpansions, expansionRegistry } from '@/lib/expansions/server';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const user = await getCurrentUser();
+    if (!user?.email) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // 1. Check Rate Limiting / Debounce via User Settings
-    const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
+    const dbUser = await prisma.user.findUnique({
+        where: { email: user.email },
         select: { id: true, expansionSettings: true }
     });
 
-    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-    const settings: any = user.expansionSettings || {};
+    const settings: any = dbUser.expansionSettings || {};
     const lastRun = settings.lastCronRun ? new Date(settings.lastCronRun) : new Date(0);
     const now = new Date();
 
@@ -38,8 +37,8 @@ export async function POST(req: NextRequest) {
     const services = new DefaultExpansionServices();
 
     const context = {
-        userId: user.id,
-        userEmail: session.user.email
+        userId: dbUser.id,
+        userEmail: user.email
     };
 
     const cronHooks = expansionRegistry.getAll()

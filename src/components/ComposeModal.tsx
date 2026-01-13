@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { TagInput } from './ui/TagInput';
 import { Editor } from './Editor';
 import { ClientExpansions } from '@/lib/expansions/client/renderer';
+import { ClientExpansionContext } from '@/lib/expansions/client/types';
 import { Popover } from './ui/Popover';
 
 interface ComposeModalProps {
@@ -208,16 +209,29 @@ export function ComposeModal({
         let finalBcc = bccTags;
         let finalSubject = subject;
 
-        // Execute Middleware
+        // Execute Middleware - Look up DECLARATIVE handlers from registry
+        const mounts = clientExpansionRegistry.getByMountPoint('BEFORE_SEND_HANDLER');
+        const sortedMounts = [...mounts].sort((a, b) => {
+            const priorityWeight = { HIGH: 3, NORMAL: 2, LOW: 1, MONITOR: 0 };
+            const pA = a.priority || 'NORMAL';
+            const pB = b.priority || 'NORMAL';
+            return priorityWeight[pB] - priorityWeight[pA];
+        });
+
         try {
-            for (const handler of beforeSendHandlers.current) {
-                const result = await handler({
+            for (const mount of sortedMounts) {
+                if (!mount.handler) continue;
+
+                const result = await mount.handler({
                     to: finalTo,
                     subject: finalSubject,
                     body: finalBody,
                     cc: finalCc,
                     bcc: finalBcc
                 });
+
+                // Monitor priority handlers are read-only / cannot stop or modify
+                if (mount.priority === 'MONITOR') continue;
 
                 if (result?.stop) {
                     console.log('Send intercepted/stopped by expansion');
@@ -332,43 +346,133 @@ export function ComposeModal({
         }
     };
 
-    const contextProps = {
+    // --- Middleware (Event Interceptors) ---
+
+    // Helper to run middleware chain
+    const runMiddleware = async <T,>(mountPoint: 'ON_BODY_CHANGE_HANDLER' | 'ON_SUBJECT_CHANGE_HANDLER' | 'ON_RECIPIENTS_CHANGE_HANDLER', initialValue: T): Promise<T> => {
+        const mounts = clientExpansionRegistry.getByMountPoint(mountPoint);
+        const sortedMounts = [...mounts].sort((a, b) => {
+            const priorityWeight = { HIGH: 3, NORMAL: 2, LOW: 1, MONITOR: 0 };
+            const pA = a.priority || 'NORMAL';
+            const pB = b.priority || 'NORMAL';
+            return priorityWeight[pB] - priorityWeight[pA];
+        });
+
+        let currentValue = initialValue;
+
+        for (const mount of sortedMounts) {
+            if (mount.handler) {
+                try {
+                    const result = await mount.handler(currentValue);
+                    if (mount.priority === 'MONITOR') continue;
+                    if (result !== undefined && result !== null) {
+                        if (typeof currentValue === 'object' && currentValue !== null && !Array.isArray(currentValue)) {
+                            currentValue = { ...currentValue, ...result };
+                        } else {
+                            currentValue = result;
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Error in middleware ${mount.id}`, e);
+                }
+            }
+        }
+        return currentValue;
+    };
+
+    // Define Actions separately to avoid TDZ (Temporal Dead Zone) issues
+    const actions = {
+        setTo: async (tags: string[]) => {
+            setToTags(tags);
+            const newState = await runMiddleware('ON_RECIPIENTS_CHANGE_HANDLER', { to: tags, cc: ccTags, bcc: bccTags });
+            if (newState.to) setToTags(newState.to);
+            if (newState.cc) setCcTags(newState.cc);
+            if (newState.bcc) setBccTags(newState.bcc);
+        },
+        setCc: async (tags: string[]) => {
+            setCcTags(tags);
+            const newState = await runMiddleware('ON_RECIPIENTS_CHANGE_HANDLER', { to: toTags, cc: tags, bcc: bccTags });
+            if (newState.to) setToTags(newState.to);
+            if (newState.cc) setCcTags(newState.cc);
+            if (newState.bcc) setBccTags(newState.bcc);
+        },
+        setBcc: async (tags: string[]) => {
+            setBccTags(tags);
+            const newState = await runMiddleware('ON_RECIPIENTS_CHANGE_HANDLER', { to: toTags, cc: ccTags, bcc: tags });
+            if (newState.to) setToTags(newState.to);
+            if (newState.cc) setCcTags(newState.cc);
+            if (newState.bcc) setBccTags(newState.bcc);
+        },
+        setSubject: async (val: string) => {
+            setSubject(val);
+            const newVal = await runMiddleware('ON_SUBJECT_CHANGE_HANDLER', val);
+            if (newVal !== val) setSubject(newVal);
+        },
+        setBody: async (val: string) => {
+            setBody(val);
+            const newVal = await runMiddleware('ON_BODY_CHANGE_HANDLER', val);
+            if (newVal !== val) setBody(newVal);
+        },
+        addRecipient: async (email: string, type: 'to' | 'cc' | 'bcc' = 'to') => {
+            const normalized = email.toLowerCase().trim();
+            let newTo = toTags, newCc = ccTags, newBcc = bccTags;
+
+            if (type === 'to' && !toTags.includes(normalized)) newTo = [...toTags, normalized];
+            else if (type === 'cc' && !ccTags.includes(normalized)) {
+                newCc = [...ccTags, normalized];
+                setShowCcBcc(true);
+            }
+            else if (type === 'bcc' && !bccTags.includes(normalized)) {
+                newBcc = [...bccTags, normalized];
+                setShowCcBcc(true);
+            }
+
+            if (type === 'to' && newTo === toTags) return;
+
+            if (type === 'to') setToTags(newTo);
+            if (type === 'cc') setCcTags(newCc);
+            if (type === 'bcc') setBccTags(newBcc);
+
+            const newState = await runMiddleware('ON_RECIPIENTS_CHANGE_HANDLER', { to: newTo, cc: newCc, bcc: newBcc });
+            if (newState.to) setToTags(newState.to);
+            if (newState.cc) setCcTags(newState.cc);
+            if (newState.bcc) setBccTags(newState.bcc);
+        },
+        removeRecipient: async (email: string, type: 'to' | 'cc' | 'bcc' = 'to') => {
+            const normalized = email.toLowerCase().trim();
+            let newTo = toTags, newCc = ccTags, newBcc = bccTags;
+
+            if (type === 'to') {
+                newTo = toTags.filter(t => t.toLowerCase().trim() !== normalized);
+                setToTags(newTo);
+            } else if (type === 'cc') {
+                newCc = ccTags.filter(t => t.toLowerCase().trim() !== normalized);
+                setCcTags(newCc);
+            } else if (type === 'bcc') {
+                newBcc = bccTags.filter(t => t.toLowerCase().trim() !== normalized);
+                setBccTags(newBcc);
+            }
+
+            const newState = await runMiddleware('ON_RECIPIENTS_CHANGE_HANDLER', { to: newTo, cc: newCc, bcc: newBcc });
+            if (newState.to) setToTags(newState.to);
+            if (newState.cc) setCcTags(newState.cc);
+            if (newState.bcc) setBccTags(newState.bcc);
+        }
+    };
+
+    const contextProps: ClientExpansionContext = {
         subject,
         to: toTags,
         cc: ccTags,
         bcc: bccTags,
-        onUpdateTo: (tags: string[]) => setToTags(tags),
-        onUpdateCc: (tags: string[]) => setCcTags(tags),
-        onUpdateBcc: (tags: string[]) => setBccTags(tags),
-        onUpdateSubject: (val: string) => setSubject(val),
-        onSetBody: (val: string) => setBody(val),
-        onAddRecipient: (email: string, type: 'to' | 'cc' | 'bcc' = 'to') => {
-            const normalized = email.toLowerCase().trim();
-            if (type === 'to') {
-                setToTags(prev => prev.includes(normalized) ? prev : [...prev, normalized]);
-            } else if (type === 'cc') {
-                setCcTags(prev => prev.includes(normalized) ? prev : [...prev, normalized]);
-                setShowCcBcc(true);
-            } else if (type === 'bcc') {
-                setBccTags(prev => prev.includes(normalized) ? prev : [...prev, normalized]);
-                setShowCcBcc(true);
-            }
-        },
-        onRemoveRecipient: (email: string, type: 'to' | 'cc' | 'bcc' = 'to') => {
-            const normalized = email.toLowerCase().trim();
-            if (type === 'to') setToTags(prev => prev.filter(t => t.toLowerCase().trim() !== normalized));
-            else if (type === 'cc') setCcTags(prev => prev.filter(t => t.toLowerCase().trim() !== normalized));
-            else if (type === 'bcc') setBccTags(prev => prev.filter(t => t.toLowerCase().trim() !== normalized));
-        },
-        onToast: (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+        ...actions,
+        toast: (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
             if (type === 'success') toast.success(msg);
             else if (type === 'error') toast.error(msg);
             else toast(msg);
         },
-        onShowConfetti: () => {
+        showConfetti: () => {
             const count = 30;
-            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-
             for (let i = 0; i < count; i++) {
                 const el = document.createElement('div');
                 el.innerText = '🎉';
@@ -376,34 +480,27 @@ export function ComposeModal({
                 el.style.left = Math.random() * 100 + 'vw';
                 el.style.top = '-20px';
                 el.style.zIndex = '9999';
-                el.style.fontSize = Math.random() * 20 + 10 + 'px';
-                el.style.pointerEvents = 'none';
                 el.style.transition = `all ${Math.random() * 1.5 + 1.5}s ease-out`;
                 document.body.appendChild(el);
-
                 setTimeout(() => {
                     el.style.transform = `translate(${Math.random() * 100 - 50}px, ${window.innerHeight + 100}px) rotate(${Math.random() * 360}deg)`;
                     el.style.opacity = '0';
                 }, 10);
-
                 setTimeout(() => el.remove(), 3000);
             }
         },
-        emailContent: body, // Provide current body
-        registerBeforeSend,
-        onAppendBody: (content: string) => {
-            setBody(prev => {
-                if (prev.includes(content)) return prev;
-                return prev + (prev ? '<br><br>' : '') + content;
-            });
+        emailContent: body,
+        appendBody: (content: string) => {
+            const currentBody = body;
+            const newVal = currentBody.includes(content) ? currentBody : currentBody + (currentBody ? '<br><br>' : '') + content;
+            actions.setBody(newVal);
         },
-        onPrependBody: (content: string) => {
+        prependBody: (content: string) => {
             editorRef.current?.prependContent(content);
         },
-        onInsertBody: (content: string) => {
+        insertBody: (content: string) => {
             editorRef.current?.insertContent(content);
         },
-        onUpdateBody: (content: string) => setBody(content),
         openPopover: (anchor: HTMLElement | DOMRect, content: React.ReactNode, options?: { width?: number | string, header?: boolean }) => {
             setPopover({ anchor, content, width: options?.width, header: options?.header });
         },
@@ -414,7 +511,7 @@ export function ComposeModal({
         addAttachment: (attachment: any) => {
             setAttachments(prev => [...prev, attachment]);
         },
-        onClose: () => {
+        close: () => {
             setActiveSlashComponent(null);
             setPopover(null);
         }
@@ -422,15 +519,15 @@ export function ComposeModal({
 
     const rightOffset = 24 + index * 40;
 
-    // Actually, I should just fix the object return directly.
-    // The previous code block was a map returning an object. I will rewrite the whole map block to be clean.
     const slashCommandsList = clientExpansionRegistry.getByMountPoint('SLASH_COMMAND').map(mount => ({
         ...(mount.slashCommand || {}),
         key: mount.slashCommand?.key || 'unknown',
         description: mount.slashCommand?.description || '',
         execute: (args?: string) => {
             if (mount.execute) {
-                mount.execute({ ...contextProps, onClose: () => setActiveSlashComponent(null) });
+                // Ensure we pass 'close' matching the interface, and alias onClose if old key is used?
+                // The interface expects 'close'.
+                mount.execute({ ...contextProps, close: () => setActiveSlashComponent(null) });
             } else if (mount.Component) {
                 // For slash commands handled internally by Editor, 
                 // this execute function serves as a signal that the command was chosen.

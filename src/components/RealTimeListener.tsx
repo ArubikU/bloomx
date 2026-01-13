@@ -3,55 +3,54 @@
 import { useEffect } from 'react';
 import { useCache } from '@/contexts/CacheContext';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { useSession } from '@/components/SessionProvider';
 
 export function RealTimeListener() {
+    const { status } = useSession();
     const { setData } = useCache();
     const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
-        const eventSource = new EventSource('/api/sse');
+        if (status !== 'authenticated' || pathname === '/login') return;
 
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'NEWMESSAGE') {
-                    // 1. Notify User
-                    toast.info('New message received!', {
-                        action: {
-                            label: 'Refresh',
-                            onClick: () => window.location.reload()
-                        }
-                    });
+        let eventSource: EventSource | null = null;
 
-                    // 2. Invalidate/Refresh Logic
-                    // We can't easily force fetching from here without context exposure, 
-                    // BUT we can update cache to trigger reactivity if we knew the new data.
-                    // Since we don't, we just trigger a router refresh or invalidate
+        // Small delay to ensure redirect is settled and avoid race on login callback
+        const timer = setTimeout(() => {
+            eventSource = new EventSource('/api/sse');
 
-                    // Simple: Play notification sound? (optional)
-
-                    // Trigger global refresh via Router
-                    router.refresh();
-
-                    // Trigger Sidebar refresh?
-                    // Sidebar polls, but we can maybe nudge it if we had a global signal.
-                    // For now, Router Refresh + Toast is good.
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'NEWMESSAGE') {
+                        toast.info('New message received!', {
+                            action: {
+                                label: 'Refresh',
+                                onClick: () => window.location.reload()
+                            }
+                        });
+                        router.refresh();
+                    }
+                } catch (e) {
+                    console.error('SSE Parse Error', e);
                 }
-            } catch (e) {
-                console.error('SSE Parse Error', e);
-            }
-        };
+            };
 
-        eventSource.onerror = (e) => {
-            console.error('SSE Error', e);
-            eventSource.close();
-        };
+            eventSource.onerror = (e) => {
+                console.error('SSE Error', e);
+                eventSource?.close();
+            };
+        }, 1000);
 
         return () => {
-            eventSource.close();
+            clearTimeout(timer);
+            if (eventSource) {
+                eventSource.close();
+            }
         };
-    }, [router]);
+    }, [router, status, pathname]);
 
     return null;
 }
