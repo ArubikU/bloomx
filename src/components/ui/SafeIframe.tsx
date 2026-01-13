@@ -57,37 +57,107 @@ export function SafeIframe({ html, className }: SafeIframeProps) {
                             color: #6b7280;
                             font-weight: bold;
                             font-size: 12px;
+                            position: relative;
+                            z-index: 50;
                         }
-                        .gmail_quote { display: none; }
+                        #content {
+                            display: block;
+                            padding: 1px; /* Prevent margin collapse */
+                        }
                     </style>
                 </head>
                 <body>
                     <div id="content">${html}</div>
                     <script>
                         function updateHeight() {
-                            const h = document.documentElement.scrollHeight;
+                            const content = document.getElementById('content');
+                            if (!content) return;
+                            // Use scrollHeight to ensure we capture all content
+                            const h = content.scrollHeight; 
                             window.parent.postMessage({ type: 'resize', height: h }, '*');
                         }
 
-                        function setupQuotes() {
-                            const content = document.getElementById('content');
-                            let firstQuote = content.querySelector('.gmail_quote');
-                            if (!firstQuote) firstQuote = content.querySelector('blockquote');
 
-                            if (firstQuote && !firstQuote.dataset.processed) {
-                                firstQuote.dataset.processed = 'true';
-                                firstQuote.style.display = 'none';
-                                const btn = document.createElement('div');
-                                btn.className = 'gmail_quote_toggle';
-                                btn.innerHTML = '•••';
-                                btn.onclick = () => {
-                                    const isHidden = firstQuote.style.display === 'none';
-                                    firstQuote.style.display = isHidden ? 'block' : 'none';
-                                    btn.innerHTML = isHidden ? 'CLOSE' : '•••';
-                                    btn.style.fontSize = isHidden ? '8px' : '12px';
-                                    updateHeight();
-                                };
-                                firstQuote.parentNode.insertBefore(btn, firstQuote);
+                        function setupQuotes() {
+                            try {
+                                const content = document.getElementById('content');
+                                if (!content) return;
+                                
+                                // Gmail often wraps history in multiple nested quotes or diff classes
+                                let quotes = content.querySelectorAll('.gmail_quote, blockquote, [class*="gmail_quote"]');
+                                
+                                // Only target the *first* major quote block
+                                let firstQuote = quotes[0];
+
+                                if (firstQuote && !firstQuote.dataset.processed) {
+                                    firstQuote.dataset.processed = 'true';
+                                    console.log('Found quote to collapse');
+
+                                    // Walk backwards to find attribution, skipping empty/br
+                                    let prev = firstQuote.previousElementSibling;
+                                    let attribution = null;
+                                    let attempts = 3; // Look back up to 3 elements
+
+                                    while (prev && attempts > 0) {
+                                        const text = prev.textContent.trim().toLowerCase();
+                                        // Skip empty or just <br>
+                                        if (!text && prev.innerHTML.trim() === '<br>') {
+                                            prev = prev.previousElementSibling;
+                                            attempts--;
+                                            continue;
+                                        }
+
+                                        // Check for keywords
+                                        if (
+                                            prev.classList.contains('gmail_attr') || 
+                                            text.includes('wrote:') || 
+                                            text.includes('wrote') && text.includes('on ') || 
+                                            text.includes('schrieb:') ||
+                                            text.includes('escribió:') ||
+                                            text.includes('enviado desde')
+                                        ) {
+                                            attribution = prev;
+                                            console.log('Found attribution line');
+                                        }
+                                        break; // Stop at first non-empty element
+                                    }
+
+                                    // Elements to toggle
+                                    const elementsToToggle = [firstQuote];
+                                    if (attribution) elementsToToggle.push(attribution);
+
+                                    // Hide default
+                                    elementsToToggle.forEach(el => el.style.setProperty('display', 'none', 'important'));
+                                    
+                                    const btn = document.createElement('div');
+                                    btn.className = 'gmail_quote_toggle';
+                                    btn.innerHTML = '•••';
+                                    btn.title = "Show quoted text";
+                                    btn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 24px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; color: #4b5563; font-weight: bold; font-size: 14px; margin: 8px 0; user-select: none; z-index: 50;';
+                                    
+                                    btn.onclick = (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const isHidden = firstQuote.style.display === 'none';
+                                        elementsToToggle.forEach(el => el.style.display = isHidden ? 'block' : 'none');
+                                        btn.innerHTML = isHidden ? 'Close' : '•••';
+                                        btn.style.width = isHidden ? 'auto' : '32px';
+                                        btn.style.padding = isHidden ? '0 8px' : '0';
+                                        
+                                        // Updates
+                                        updateHeight();
+                                        setTimeout(updateHeight, 50);
+                                        setTimeout(updateHeight, 200);
+                                    };
+
+                                    // Insert before the top-most element (attribution or quote)
+                                    const insertPoint = attribution || firstQuote;
+                                    if(insertPoint.parentNode) {
+                                        insertPoint.parentNode.insertBefore(btn, insertPoint);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Error setting up quotes:', e);
                             }
                         }
 
@@ -99,9 +169,28 @@ export function SafeIframe({ html, className }: SafeIframeProps) {
                             }
                         });
 
+                        // Run setup immediately
                         setupQuotes();
-                        window.addEventListener('load', updateHeight);
-                        new ResizeObserver(updateHeight).observe(document.body);
+                        
+                        // And ensure sizing on load / re-setup quotes if needed
+                        window.addEventListener('load', () => {
+                            setupQuotes();
+                            updateHeight();
+                            setTimeout(updateHeight, 100);
+                        });
+
+                        // Observe size changes on CONTENT, not body, to be precise
+                        const content = document.getElementById('content');
+                        if(content) {
+                            new ResizeObserver(() => {
+                                updateHeight();
+                            }).observe(content);
+                            
+                            // Also observe body just in case content doesn't catch all (images loading?)
+                             new ResizeObserver(() => {
+                                updateHeight();
+                            }).observe(document.body);
+                        }
                     </script>
                 </body>
                 </html>
@@ -133,7 +222,7 @@ export function SafeIframe({ html, className }: SafeIframeProps) {
         <iframe
             ref={iframeRef}
             className={className}
-            style={{ width: '100%', height, border: 'none', overflow: 'hidden' }}
+            style={{ width: '100%', height, border: 'none', overflow: 'auto' }}
             title="Email Content"
             sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin"
         />

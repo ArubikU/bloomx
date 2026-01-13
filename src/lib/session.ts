@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { signJWT, verifyJWT, COOKIE_NAME } from "./jwt";
 import { prisma } from "./prisma";
 
@@ -11,11 +11,22 @@ export async function setSessionCookie(payload: any) {
         path: "/",
         maxAge: 30 * 24 * 60 * 60, // 30 days
     });
+    return token; // Return token for client-side storage
 }
 
 export async function getSessionCookie() {
     const cookieStore = await cookies();
-    const token = cookieStore.get(COOKIE_NAME)?.value;
+    let token = cookieStore.get(COOKIE_NAME)?.value;
+
+    // Check Authorization Header if Cookie is missing or as override
+    if (!token) {
+        const headersList = await headers();
+        const authHeader = headersList.get("authorization");
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        }
+    }
+
     if (!token) return null;
     return await verifyJWT(token);
 }

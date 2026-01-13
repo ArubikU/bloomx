@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Archive, Trash2, Star, Tag } from 'lucide-react'; // Imports for icons
@@ -61,6 +61,53 @@ export function EmailList() {
 
     const filteredEmails = activeTab === 'unread' ? emails.filter(e => !e.read) : emails;
 
+    // --- Threading / Grouping Logic ---
+    const normalizeSubject = (subject: string) => {
+        if (!subject) return '';
+        // Remove Re:, Fwd:, Invitation:, etc. (Case insensitive)
+        return subject.replace(/^((re|fwd|rv|enc|invitaci[oó]n|invitaci[oó]n actualizada|accepted|declined|tentative|cancelado|canceled|updated): ?)+/gi, '').trim();
+    };
+
+    const groupedEmails = (() => {
+        const groups: { [key: string]: Email[] } = {};
+        const standalone: Email[] = [];
+
+        filteredEmails.forEach(email => {
+            const rawSubject = email.subject || '';
+            const normalized = normalizeSubject(rawSubject);
+
+            // Don't group "No Subject" or very short subjects to avoid false positives
+            if (!normalized || normalized.length < 3 || normalized === '(No Subject)') {
+                // Treat as unique key using ID to avoid collision
+                groups[`__unique_${email.id}`] = [email];
+                return;
+            }
+
+            if (!groups[normalized]) {
+                groups[normalized] = [];
+            }
+            groups[normalized].push(email);
+        });
+
+        // Convert back to array for rendering
+        // We want to sort the GROUPS by the 'latest' email in that group (which determines position)
+        const groupList = Object.values(groups).map(groupEmails => {
+            // Sort emails within group by date desc (newest first)
+            groupEmails.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            return {
+                id: groupEmails[0].id, // Use latest email ID as group ID
+                latestEmail: groupEmails[0],
+                allEmails: groupEmails,
+                count: groupEmails.length
+            };
+        });
+
+        // Sort groups by their latest email's date
+        groupList.sort((a, b) => new Date(b.latestEmail.createdAt).getTime() - new Date(a.latestEmail.createdAt).getTime());
+
+        return groupList;
+    })();
+
     // Advanced Search State
     const [showFilters, setShowFilters] = useState(false);
     const [filterFrom, setFilterFrom] = useState('');
@@ -102,17 +149,17 @@ export function EmailList() {
             document.querySelector<HTMLInputElement>('input[placeholder="Search emails..."]')?.focus();
         },
         'j': () => {
-            if (filteredEmails.length === 0) return;
-            const currentIndex = focusedId ? filteredEmails.findIndex(e => e.id === focusedId) : -1;
-            const nextIndex = Math.min(currentIndex + 1, filteredEmails.length - 1);
-            setFocusedId(filteredEmails[nextIndex].id);
+            if (groupedEmails.length === 0) return;
+            const currentIndex = focusedId ? groupedEmails.findIndex(g => g.id === focusedId) : -1;
+            const nextIndex = Math.min(currentIndex + 1, groupedEmails.length - 1);
+            setFocusedId(groupedEmails[nextIndex].id);
             // Optional: Scroll into view logic here
         },
         'k': () => {
-            if (filteredEmails.length === 0) return;
-            const currentIndex = focusedId ? filteredEmails.findIndex(e => e.id === focusedId) : 0;
+            if (groupedEmails.length === 0) return;
+            const currentIndex = focusedId ? groupedEmails.findIndex(g => g.id === focusedId) : 0;
             const prevIndex = Math.max(currentIndex - 1, 0);
-            setFocusedId(filteredEmails[prevIndex].id);
+            setFocusedId(groupedEmails[prevIndex].id);
         },
         'x': () => {
             if (focusedId) {
@@ -148,8 +195,11 @@ export function EmailList() {
         const cacheKey = labelParam ? `emails-label-${labelParam}` : `emails-${folder}`;
 
         try {
-            if (mode === 'refresh') setLoading(true);
-            else setLoadingMore(true);
+            if (mode === 'refresh') {
+                if (emails.length === 0) setLoading(true);
+            } else {
+                setLoadingMore(true);
+            }
 
             let currentEmails = [...emails];
             const labelParam = searchParams.get('label');
@@ -180,6 +230,7 @@ export function EmailList() {
                         // Cache invalidated or empty -> Force full refresh
                         currentEmails = [];
                         setEmails([]);
+                        setLoading(true); // Force loading if cache cleared
                     }
                 }
 
@@ -255,13 +306,14 @@ export function EmailList() {
     };
 
     const prefetchEmail = async (id: string) => {
-        const cacheKey = `email-${id}`;
+        // Match key with MailView
+        const cacheKey = `email-${id}-thread-v2`;
         // Check if already in cache
         const cached = await getData(cacheKey);
         if (cached) return;
 
         try {
-            const data = await fetchDeduped(`/api/emails/${id}`);
+            const data = await fetchDeduped(`/api/emails/${id}?thread=true`);
             if (data?.email) {
                 setData(cacheKey, data, { silent: true });
             }
@@ -271,10 +323,22 @@ export function EmailList() {
         }
     };
 
+    // Track previous nav state to avoid clearing on cache updates
+    const prevFolder = useRef(folder);
+    const prevLabel = useRef(searchParams.get('label'));
+
     // Initial Sync on Mount/Folder Change/Label Change
     useEffect(() => {
-        setEmails([]); // Reset on folder change
-        setHasMore(true);
+        const currentLabel = searchParams.get('label');
+        const hasNavigated = folder !== prevFolder.current || currentLabel !== prevLabel.current;
+
+        if (hasNavigated) {
+            setEmails([]); // Reset only on navigation
+            setHasMore(true);
+            prevFolder.current = folder;
+            prevLabel.current = currentLabel;
+        }
+
         syncEmails('refresh');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [folder, searchParams.get('label'), cacheVersion]);
@@ -319,19 +383,28 @@ export function EmailList() {
         const newSelected = new Set(selectedIds);
 
         if (e.shiftKey && lastSelectedId) {
-            const currentIndex = filteredEmails.findIndex(e => e.id === id);
-            const lastIndex = filteredEmails.findIndex(e => e.id === lastSelectedId);
+            const currentIndex = groupedEmails.findIndex(g => g.id === id);
+            const lastIndex = groupedEmails.findIndex(g => g.id === lastSelectedId);
             const start = Math.min(currentIndex, lastIndex);
             const end = Math.max(currentIndex, lastIndex);
 
             for (let i = start; i <= end; i++) {
-                newSelected.add(filteredEmails[i].id);
+                // Select ALL emails in the group
+                groupedEmails[i].allEmails.forEach(email => newSelected.add(email.id));
             }
         } else {
-            if (newSelected.has(id)) {
-                newSelected.delete(id);
+            const group = groupedEmails.find(g => g.id === id);
+            const idsToToggle = group ? group.allEmails.map(e => e.id) : [id];
+
+            // Check if ANY are selected (to toggle off) or if we are toggling on
+            // Actually usually if the main (latest) is selected, we deselect all.
+            // If main is not selected, we select all.
+            const isSelected = newSelected.has(id);
+
+            if (isSelected) {
+                idsToToggle.forEach(i => newSelected.delete(i));
             } else {
-                newSelected.add(id);
+                idsToToggle.forEach(i => newSelected.add(i));
             }
             setLastSelectedId(id);
         }
@@ -342,7 +415,8 @@ export function EmailList() {
         if (selectedIds.size === filteredEmails.length && filteredEmails.length > 0) {
             setSelectedIds(new Set());
         } else {
-            setSelectedIds(new Set(filteredEmails.map(e => e.id)));
+            // Select ALL emails (flattened)
+            setSelectedIds(new Set(emails.map(e => e.id)));
         }
     };
 
@@ -654,7 +728,12 @@ export function EmailList() {
                         <Loader2 className="animate-spin h-6 w-6 text-primary/40" />
                     </div>
                 ) : filteredEmails.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-center p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="flex flex-col items-center justify-center h-64 text-center p-4"
+                    >
                         <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
                             <Search className="h-6 w-6 text-muted-foreground/50" />
                         </div>
@@ -664,17 +743,14 @@ export function EmailList() {
                                 ? `No emails with label "${searchParams.get('label')}" in ${folder}`
                                 : `Your ${folder} is empty.`}
                         </p>
-                    </div>
+                    </motion.div>
                 ) : (
                     <div className="flex flex-col gap-1.5 pb-20 md:pb-4">
                         <AnimatePresence>
-                            {filteredEmails.map((email, index) => {
+                            {groupedEmails.map((group, index) => {
+                                const email = group.latestEmail;
                                 const badges = getBadges(email);
-                                const isSelected = selectedId === email.id;
-
-                                // Swipeable Item Logic
-                                // We use a separate component effectively inline or extracted? 
-                                // Let's keep it inline-ish but organized.
+                                const isSelected = selectedIds.has(email.id); // Check if latest is selected (proxy for group)
 
                                 return (
                                     <SwipeableEmailItem
@@ -687,9 +763,13 @@ export function EmailList() {
                                         onSelect={handleSelect}
                                         onSelectToggle={toggleSelection}
                                         onPrefetch={prefetchEmail}
-                                        onSwipeAction={handleBulkAction}
+                                        onSwipeAction={(updates: any) => {
+                                            // Apply to ALL in group
+                                            handleBulkAction({ ids: group.allEmails.map(e => e.id), ...updates });
+                                        }}
                                         badges={badges}
                                         folder={folder}
+                                        threadCount={group.count}
                                     />
                                 );
                             })}
@@ -750,7 +830,7 @@ export function EmailList() {
 
 // Extracted Swipeable Component
 function SwipeableEmailItem({
-    email, index, isSelected, isFocused, selectedIds, onSelect, onSelectToggle, onPrefetch, onSwipeAction, badges, folder
+    email, index, isSelected, isFocused, selectedIds, onSelect, onSelectToggle, onPrefetch, onSwipeAction, badges, folder, threadCount
 }: any) {
     const [dragX, setDragX] = useState(0);
 
@@ -770,6 +850,8 @@ function SwipeableEmailItem({
     // Calculate background opacity/color based on drag
     const archiveOpacity = Math.min(Math.max(dragX / SWIPE_THRESHOLD, 0), 1);
     const trashOpacity = Math.min(Math.max(-dragX / SWIPE_THRESHOLD, 0), 1);
+
+    const hoverTimer = useRef<NodeJS.Timeout | null>(null);
 
     return (
         <div className="relative overflow-hidden rounded-xl">
@@ -798,6 +880,7 @@ function SwipeableEmailItem({
                 }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0, x: 0 }} // Ensure x resets
+                exit={{ opacity: 0, height: 0, marginBottom: 0, overflow: 'hidden' }}
                 transition={{ duration: 0.2, delay: index * 0.03 }}
                 className={cn(
                     "group relative flex items-start gap-3 p-3 text-left text-sm transition-colors border border-transparent select-none cursor-pointer bg-white z-10",
@@ -807,7 +890,17 @@ function SwipeableEmailItem({
                         : "hover:bg-gray-50 hover:shadow-sm border-gray-100",
                     !email.read && !isSelected && !selectedIds.has(email.id) && "border-l-4 border-l-blue-500 shadow-sm"
                 )}
-                onMouseEnter={() => onPrefetch(email.id)}
+                onMouseEnter={() => {
+                    hoverTimer.current = setTimeout(() => {
+                        onPrefetch(email.id);
+                    }, 500);
+                }}
+                onMouseLeave={() => {
+                    if (hoverTimer.current) {
+                        clearTimeout(hoverTimer.current);
+                        hoverTimer.current = null;
+                    }
+                }}
                 onClick={() => onSelect(email.id)}
                 style={{ x: dragX }} // Bind motion x
             >
@@ -844,6 +937,11 @@ function SwipeableEmailItem({
                             !email.read && "text-blue-600"
                         )}>
                             {folder === 'sent' && email.to ? `To: ${email.to}` : email.from}
+                            {threadCount > 1 && (
+                                <span className="ml-2 inline-flex items-center justify-center bg-muted text-muted-foreground text-[10px] font-bold h-5 min-w-[20px] px-1 rounded-full border border-border/50">
+                                    {threadCount}
+                                </span>
+                            )}
                         </div>
                         <div className={cn(
                             "text-[10px] whitespace-nowrap shrink-0",

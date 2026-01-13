@@ -38,6 +38,23 @@ function LoginForm() {
                 setLoading(false);
             } else {
                 console.log('[LOGIN-CLIENT] Login successful, redirecting manually...');
+
+                // Store in Account Manager (Multi-account support)
+                if (result.token && result.user) {
+                    try {
+                        const { AccountManager } = await import('@/lib/account-manager');
+                        AccountManager.addAccount({
+                            id: result.user.id,
+                            email: result.user.email,
+                            name: result.user.name,
+                            avatar: result.user.avatar,
+                            token: result.token
+                        });
+                    } catch (err) {
+                        console.error('Failed to save account locally', err);
+                    }
+                }
+
                 // Force a hard reload to pick up the HttpOnly cookie and update state
                 window.location.href = '/';
             }

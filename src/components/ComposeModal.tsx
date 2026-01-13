@@ -16,6 +16,7 @@ import { Editor } from './Editor';
 import { ClientExpansions } from '@/lib/expansions/client/renderer';
 import { ClientExpansionContext } from '@/lib/expansions/client/types';
 import { Popover } from './ui/Popover';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ComposeModalProps {
     id: string;
@@ -539,10 +540,16 @@ export function ComposeModal({
         }) : undefined
     }));
 
+    // ...
+
     if (minimized) {
         return (
-            <div
-                className="fixed bottom-0 z-50 w-64  rounded-t-lg bg-background shadow-lg transition-transform duration-200"
+            <motion.div
+                initial={{ opacity: 0, y: 100, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 100, scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="fixed bottom-0 z-50 w-64 rounded-t-lg bg-background shadow-lg"
                 style={{ right: `${rightOffset}px` }}
             >
                 <div
@@ -562,15 +569,15 @@ export function ComposeModal({
                         </button>
                     </div>
                 </div>
-            </div>
+            </motion.div>
         );
     }
 
     const modalClass = maximized
-        ? "fixed inset-0 md:inset-4 z-50 flex flex-col bg-white rounded-none md:rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 shadow-md"
+        ? "fixed inset-0 md:inset-4 z-50 flex flex-col bg-white rounded-none md:rounded-lg shadow-2xl overflow-hidden shadow-md"
         : cn(
-            "fixed bottom-0 right-0 md:right-[var(--right-offset)] z-50 flex flex-col bg-white rounded-t-xl shadow-2xl overflow-hidden ring-1 ring-border/10 animate-in slide-in-from-bottom-10 duration-200 shadow-md",
-            isResizing ? "transition-none select-none" : "transition-all duration-200"
+            "fixed bottom-0 right-0 md:right-[var(--right-offset)] z-50 flex flex-col bg-white rounded-t-xl shadow-2xl overflow-hidden ring-1 ring-border/10 shadow-md",
+            isResizing ? "transition-none select-none" : ""
         );
 
     const modalStyle = maximized
@@ -582,7 +589,14 @@ export function ComposeModal({
         } as React.CSSProperties;
 
     return (
-        <div className={modalClass} style={modalStyle}>
+        <motion.div
+            className={modalClass}
+            style={modalStyle}
+            initial={{ opacity: 0, y: 100, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        >
             {/* Resize handles (Top and Left edges) */}
             {!maximized && (
                 <>
@@ -908,6 +922,6 @@ export function ComposeModal({
                 </div>
 
             </div>
-        </div >
+        </motion.div>
     );
 }

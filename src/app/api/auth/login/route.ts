@@ -27,13 +27,13 @@ export async function POST(req: NextRequest) {
         }
 
         // Create Session
-        await setSessionCookie({
+        const token = await setSessionCookie({
             sub: user.id,
             email: user.email,
             name: user.name,
         });
 
-        return NextResponse.json({ success: true, user: { id: user.id, email: user.email, name: user.name } });
+        return NextResponse.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name } });
 
     } catch (error) {
         console.error("Login error:", error);

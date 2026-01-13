@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { brand } from '@/lib/brand';
 import { useSearchParams } from 'next/navigation';
-import { Inbox, File, Send, ArchiveX, Trash2, Archive, Plus, Tag, Check, X, Clock, Sparkles } from 'lucide-react';
+import { Inbox, File, Send, ArchiveX, Trash2, Archive, Plus, Tag, Check, X, Clock, Sparkles, LogOut, UserPlus, Settings, ChevronUp, MoreHorizontal } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import { useExpansions } from '@/hooks/useExpansions';
 import { cn } from '@/lib/utils';
@@ -14,8 +15,10 @@ import { CronTrigger } from '@/components/CronTrigger';
 import { useCompose } from '@/contexts/ComposeContext';
 import { useCache } from '@/contexts/CacheContext';
 import { useSession } from '@/components/SessionProvider';
+import { AccountManager, StoredAccount } from '@/lib/account-manager';
 import { toast } from 'sonner';
 import { SettingsModal } from './SettingsModal';
+
 // Init
 ensureClientExpansions();
 
@@ -69,8 +72,6 @@ export function Sidebar({ onClose }: SidebarProps) {
     const [isSubmittingLabel, setIsSubmittingLabel] = useState(false);
 
     const [showSettings, setShowSettings] = useState(false);
-
-
 
     useEffect(() => {
         async function loadData() {
@@ -166,14 +167,14 @@ export function Sidebar({ onClose }: SidebarProps) {
         { name: 'Inbox', icon: Inbox, id: 'inbox', count: counts.inbox },
         { name: 'Drafts', icon: File, id: 'drafts', count: counts.drafts },
         { name: 'Sent', icon: Send, id: 'sent', count: counts.sent },
-        { name: 'Scheduled', icon: Clock, id: 'scheduled', count: counts.scheduled || 0 }, // Added Scheduled
+        { name: 'Scheduled', icon: Clock, id: 'scheduled', count: counts.scheduled || 0 },
         { name: 'Junk', icon: ArchiveX, id: 'spam', count: counts.spam },
         { name: 'Trash', icon: Trash2, id: 'trash', count: counts.trash },
         { name: 'Archive', icon: Archive, id: 'archive', count: counts.archive },
     ];
 
     return (
-        <div className="flex h-full flex-col bg-muted/10 group h-full">
+        <div className="flex h-full flex-col bg-muted/10 group">
             {/* Account / Compose */}
             <div className="flex px-4 py-4 items-center justify-between">
                 <div className="flex items-center gap-2 text-primary font-bold text-lg tracking-tight">
@@ -200,7 +201,9 @@ export function Sidebar({ onClose }: SidebarProps) {
             </div>
 
             <div className="px-3 mb-4">
-                <button
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => {
                         openCompose();
                         onClose?.();
@@ -209,7 +212,7 @@ export function Sidebar({ onClose }: SidebarProps) {
                 >
                     <Plus className="h-4 w-4" />
                     <span>New Message</span>
-                </button>
+                </motion.button>
             </div>
 
             {/* Main Navigation */}
@@ -217,28 +220,41 @@ export function Sidebar({ onClose }: SidebarProps) {
                 {mainNav.map((item) => {
                     const isActive = currentFolder === item.id;
                     return (
-                        <Link
-                            key={item.id}
-                            href={`/?folder=${item.id}`}
-                            onClick={() => onClose?.()}
-                            className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all group/item",
-                                isActive
-                                    ? "bg-primary/10 text-primary"
-                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        <div key={item.id} className="relative">
+                            {isActive && (
+                                <motion.div
+                                    layoutId="sidebar-nav-active"
+                                    className="absolute inset-0 bg-primary/10 rounded-lg"
+                                    initial={false}
+                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
                             )}
-                        >
-                            <item.icon className={cn("h-4 w-4 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover/item:text-foreground")} />
-                            {item.name}
-                            {item.count > 0 && (
-                                <span className={cn(
-                                    "ml-auto text-xs font-semibold px-2 py-0.5 rounded-full",
-                                    isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                                )}>
-                                    {item.count}
-                                </span>
-                            )}
-                        </Link>
+                            <Link
+                                href={`/?folder=${item.id}`}
+                                onClick={() => onClose?.()}
+                                className={cn(
+                                    "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors group/item",
+                                    isActive
+                                        ? "text-primary"
+                                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                )}
+                            >
+                                <item.icon className={cn("h-4 w-4 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover/item:text-foreground")} />
+                                {item.name}
+                                {item.count > 0 && (
+                                    <motion.span
+                                        key={item.count}
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        className={cn(
+                                            "ml-auto text-xs font-semibold px-2 py-0.5 rounded-full",
+                                            isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                                        )}>
+                                        {item.count}
+                                    </motion.span>
+                                )}
+                            </Link>
+                        </div>
                     );
                 })}
             </div>
@@ -262,7 +278,12 @@ export function Sidebar({ onClose }: SidebarProps) {
 
             <div className="flex-1 overflow-y-auto px-2 pb-4">
                 {isCreatingLabel && (
-                    <div className="mb-2 px-2 pb-2 animate-in fade-in slide-in-from-top-1 duration-200 bg-muted/30 rounded-lg p-2 border border-border/50">
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mb-2 px-2 pb-2 bg-muted/30 rounded-lg p-2 border border-border/50 overflow-hidden"
+                    >
                         <div className="flex items-center gap-1">
                             <input
                                 autoFocus
@@ -283,7 +304,7 @@ export function Sidebar({ onClose }: SidebarProps) {
                                 <X className="h-3 w-3" />
                             </button>
                         </div>
-                    </div>
+                    </motion.div>
                 )}
 
                 <nav className="grid gap-0.5">
@@ -330,14 +351,8 @@ export function Sidebar({ onClose }: SidebarProps) {
             />
 
             {/* User Profile / Settings stub - Hidden on Mobile */}
-            <div className="p-4 border-t mt-auto hidden md:block">
-                <button
-                    onClick={() => setShowSettings(true)}
-                    className="flex w-full items-center gap-3 hover:bg-muted/50 p-2 rounded-lg transition-colors -mx-2 text-left"
-                >
-                    <UserProfileAvatar />
-                    <UserProfileDisplay />
-                </button>
+            <div className="p-4 mt-auto hidden md:block">
+                <AccountSwitcher onOpenSettings={() => setShowSettings(true)} />
             </div>
 
             <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
@@ -346,24 +361,147 @@ export function Sidebar({ onClose }: SidebarProps) {
     );
 }
 
-function UserProfileAvatar() {
+function AccountSwitcher({ onOpenSettings }: { onOpenSettings: () => void }) {
     const { data: session } = useSession();
-    if (session?.user?.avatar) {
-        return <img src={session.user.avatar} alt="Avatar" className="h-9 w-9 rounded-full object-cover border border-border" />;
-    }
-    return (
-        <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white font-medium text-xs">
-            {(session?.user?.name?.[0] || session?.user?.email?.[0] || '?').toUpperCase()}
-        </div>
-    );
-}
+    const [isOpen, setIsOpen] = useState(false);
+    const [accounts, setAccounts] = useState<StoredAccount[]>([]);
 
-function UserProfileDisplay() {
-    const { data: session } = useSession();
+    useEffect(() => {
+        setAccounts(AccountManager.getAccounts());
+
+        // Listen for changes
+        const handler = () => setAccounts(AccountManager.getAccounts());
+        window.addEventListener('account-change', handler); // We might need to dispatch this on storage event too
+        return () => window.removeEventListener('account-change', handler);
+    }, []);
+
+    const handleSwitch = async (account: StoredAccount) => {
+        if (account.id === session?.user?.id) return;
+
+        const toastId = toast.loading('Switching account...');
+        try {
+            // Swap Cookie
+            await fetch('/api/auth/set-cookie', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: account.token })
+            });
+
+            AccountManager.setActive(account.id);
+            window.location.reload();
+        } catch (e) {
+            toast.error('Failed to switch', { id: toastId });
+        }
+    };
+
+    const handleLogout = async (accountId?: string) => {
+        try {
+            if (!accountId || accountId === session?.user?.id) {
+                // Logout Current
+                await fetch('/api/auth/logout', { method: 'POST' });
+                if (accountId) AccountManager.removeAccount(accountId);
+
+                // If there are other accounts, switch to one?
+                const others = AccountManager.getAccounts().filter(a => a.id !== accountId);
+                if (others.length > 0) {
+                    handleSwitch(others[0]);
+                } else {
+                    window.location.href = '/login';
+                }
+            } else {
+                // Forget other account
+                AccountManager.removeAccount(accountId);
+                setAccounts(AccountManager.getAccounts()); // Update local state
+                toast.success('Account removed');
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleAddAccount = () => {
+        window.location.href = '/login';
+    };
+
     if (!session?.user) return null;
-    return (<div className="flex flex-col overflow-hidden">
-        <span className="text-sm font-medium truncate">{session.user.name || 'User'}</span>
-        <span className="text-xs text-muted-foreground truncate max-w-[140px]">{session.user.email}</span>
-    </div>
+
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex w-full items-center gap-3 hover:bg-muted/50 p-2 rounded-lg transition-colors -mx-2 text-left"
+            >
+                <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-pink-500 to-violet-500 flex items-center justify-center text-white font-medium text-xs shrink-0 border border-border">
+                    {(session.user.name?.[0] || session.user.email?.[0] || '?').toUpperCase()}
+                </div>
+                <div className="flex flex-col overflow-hidden flex-1">
+                    <span className="text-sm font-medium truncate">{session.user.name || 'User'}</span>
+                    <span className="text-xs text-muted-foreground truncate">{session.user.email}</span>
+                </div>
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute bottom-full left-0 w-64 mb-2 bg-popover/95 backdrop-blur-md shadow-lg rounded-xl p-2 z-50 flex flex-col gap-1 ring-1 ring-border/10"
+                        >
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                                My Accounts
+                            </div>
+
+                            {accounts.map(acc => {
+                                const isActive = acc.id === session.user?.id;
+                                return (
+                                    <div key={acc.id} className="group flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => handleSwitch(acc)}>
+                                        <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0",
+                                            isActive ? "bg-primary" : "bg-muted-foreground/40")}>
+                                            {acc.name?.[0] || acc.email[0]}
+                                        </div>
+                                        <div className="flex flex-col overflow-hidden flex-1">
+                                            <span className={cn("text-sm font-medium truncate", isActive && "text-primary")}>{acc.name}</span>
+                                            <span className="text-xs text-muted-foreground truncate">{acc.email}</span>
+                                        </div>
+                                        {isActive && <Check className="h-4 w-4 text-primary" />}
+                                        {!isActive && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleLogout(acc.id); }}
+                                                className="p-1.5 text-muted-foreground hover:bg-red-100 hover:text-red-600 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                                                title="Forget account"
+                                            >
+                                                <LogOut className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            <div className="h-px bg-border my-1" />
+
+                            <button onClick={handleAddAccount} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted text-sm font-medium">
+                                <UserPlus className="h-4 w-4 text-muted-foreground" />
+                                Add another account
+                            </button>
+
+                            <button onClick={onOpenSettings} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted text-sm font-medium">
+                                <Settings className="h-4 w-4 text-muted-foreground" />
+                                Settings
+                            </button>
+
+                            <button onClick={() => handleLogout(session.user?.id)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-red-50 text-red-600 text-sm font-medium">
+                                <LogOut className="h-4 w-4" />
+                                Sign out
+                            </button>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </div>
     );
 }

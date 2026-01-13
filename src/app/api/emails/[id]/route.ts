@@ -13,6 +13,9 @@ export async function GET(
 
     try {
         const { id } = await params;
+        const { searchParams } = new URL(req.url);
+        const fetchThread = searchParams.get('thread') === 'true';
+
         const email = await prisma.email.findUnique({
             where: { id },
             include: {
@@ -27,35 +30,85 @@ export async function GET(
 
         let content = email.snippet || "(No content)";
 
-        // Fetch full content from B2 if available
-        if (email.htmlKey) {
-            const storedHtml = await getFromStorage(email.htmlKey);
-            if (storedHtml) content = storedHtml;
-        } else if (email.textKey) {
-            const storedText = await getFromStorage(email.textKey);
-            if (storedText) content = `< pre > ${storedText} </pre>`;
-        }
-
-        // Generate signed URLs for attachments
-        const attachmentsWithUrls = await Promise.all(email.attachments.map(async (att) => {
-            if (att.key) {
-                // Determine if we need to sign it or if it's already a public URL (legacy?)
-                // Assuming all keys need signing based on storage.ts
-                const url = await import('@/lib/storage').then(m => m.getSignedDownloadUrl(att.key));
-                return { ...att, url };
+        // Helper to fetch content
+        const fetchContent = async (e: any) => {
+            if (e.htmlKey) {
+                const storedHtml = await getFromStorage(e.htmlKey);
+                return storedHtml ?? "";
+            } else if (e.textKey) {
+                const storedText = await getFromStorage(e.textKey);
+                return storedText ? `<pre>${storedText}</pre>` : "";
             }
-            return att;
-        }));
+            return e.snippet || "";
+        };
+
+        // Helper to sign attachments
+        const signAttachments = async (list: any[]) => {
+            return Promise.all(list.map(async (att) => {
+                if (att.key) {
+                    const url = await import('@/lib/storage').then(m => m.getSignedDownloadUrl(att.key));
+                    return { ...att, url };
+                }
+                return att;
+            }));
+        };
+
+        content = await fetchContent(email);
+        const attachmentsWithUrls = await signAttachments(email.attachments ?? []);
 
         const emailWithSignedAttachments = {
             ...email,
             attachments: attachmentsWithUrls
         };
 
+        let threadEmails: any[] = [];
+
+        if (fetchThread && email.subject) {
+            const normalizeSubject = (subject: string) => {
+                if (!subject) return '';
+                // Remove Re:, Fwd:, etc. (Case insensitive) - Logic matches frontend
+                return subject.replace(/^((re|fwd|rv|enc|invitaci[oó]n|invitaci[oó]n actualizada|accepted|declined|tentative|cancelado|canceled|updated): ?)+/gi, '').trim();
+            };
+
+            const normalized = normalizeSubject(email.subject);
+
+            // Only search if not empty and length sufficient to be a "topic"
+            if (normalized && normalized.length >= 3) {
+                // Find all emails with this subject (ignoring prefixes)
+                const threadCandidates = await prisma.email.findMany({
+                    where: {
+                        userId: user.id,
+                        OR: [
+                            { subject: { equals: normalized, mode: 'insensitive' } },
+                            { subject: { startsWith: 'Re: ' + normalized, mode: 'insensitive' } }, // Simple heuristic
+                            { subject: { contains: normalized, mode: 'insensitive' } } // Broader search, filter in code
+                        ]
+                    },
+                    orderBy: { createdAt: 'desc' }, // Newest first
+                    include: {
+                        labels: true,
+                        attachments: true
+                    }
+                });
+
+                // Strict filter and prepare
+                const pEmails = threadCandidates.filter(e => normalizeSubject(e.subject || '') === normalized);
+
+                threadEmails = await Promise.all(pEmails.map(async (e) => {
+                    const c = await fetchContent(e);
+                    const atts = await signAttachments(e.attachments ?? []);
+                    return {
+                        email: { ...e, attachments: atts },
+                        content: c
+                    };
+                }));
+            }
+        }
 
         return NextResponse.json({
             email: emailWithSignedAttachments,
-            content
+            content,
+            thread: threadEmails.length > 0 ? threadEmails : undefined
         });
 
     } catch (error) {
@@ -74,12 +127,16 @@ export async function PATCH(
     try {
         const { id } = await params; // Await the params
         const body = await req.json();
-        const { starred, folder, labelIds, toggleLabelId } = body;
+        const { starred, folder, labelIds, toggleLabelId, read } = body;
 
         const updateData: any = {};
 
         if (typeof starred === 'boolean') {
             updateData.starred = starred;
+        }
+
+        if (typeof read === 'boolean') {
+            updateData.read = read;
         }
 
         if (folder) {
