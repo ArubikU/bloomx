@@ -4,18 +4,26 @@ import { Users } from 'lucide-react';
 import { MailGroupsSettings } from './MailGroupsSettings';
 import { toast } from 'sonner';
 import { useExpansionSettings } from '@/hooks/useExpansionSettings';
+import { useSession, getSession } from '@/components/SessionProvider';
+import { useSecureSync } from '@/hooks/useSecureSync';
+import { secureRead } from '@/lib/expansions/client/secure-storage';
+
+// --- Secure Sync Pattern ---
+// This component syncs the mail groups into secure storage so the middleware 
+// can access them instantly without hitting the API on every recipient change.
 
 export const MailGroupsClientExpansion = ({ context }: { context: ClientExpansionContext }) => {
-    const [groups, setGroups] = useState<Record<string, string[]>>({});
-    const [loaded, setLoaded] = useState(false);
-
+    const { data: session } = useSession();
+    const userId = session?.user?.email || 'default-user';
     const { settings, loading } = useExpansionSettings('core-mail-groups');
 
-    // Load groups from settings
-    useEffect(() => {
-        if (loading) return;
+    // Storing data for the middleware's use via useSecureSync
+    const [_, setStoredGroups] = useSecureSync<Record<string, string[]>>('mail-groups-data', {}, userId);
 
-        const rawGroups = settings?.groups || [];
+    useEffect(() => {
+        if (loading || !settings) return;
+
+        const rawGroups = settings.groups || [];
         const groupMap: Record<string, string[]> = {};
 
         if (Array.isArray(rawGroups)) {
@@ -29,54 +37,10 @@ export const MailGroupsClientExpansion = ({ context }: { context: ClientExpansio
             });
         }
 
-        setGroups(groupMap);
-        setLoaded(true);
-    }, [settings, loading]);
+        setStoredGroups(groupMap);
+    }, [settings, loading, setStoredGroups]);
 
-    // Watchers for To/Cc/Bcc
-    // NOTE: This assumes context.to is updated on each render or we are re-rendered when it changes.
-    // In ComposeModal, client expansions are re-rendered when state changes because they are children?
-    // Yes, ComposeModal re-renders on toTags change, causing this to re-render with new context.
-
-    // We need to detect if any tag matches a group
-    useEffect(() => {
-        if (!loaded) return;
-        checkAndExpand(context.to, context.onUpdateTo, 'To');
-    }, [context.to, loaded]);
-
-    useEffect(() => {
-        if (!loaded) return;
-        checkAndExpand(context.cc, context.onUpdateCc, 'Cc');
-    }, [context.cc, loaded]);
-
-    useEffect(() => {
-        if (!loaded) return;
-        checkAndExpand(context.bcc, context.onUpdateBcc, 'Bcc');
-    }, [context.bcc, loaded]);
-
-    const checkAndExpand = (tags: string[] | undefined, updater: ((t: string[]) => void) | undefined, fieldName: string) => {
-        if (!tags || !updater) return;
-
-        let hasExpansion = false;
-        const newTags: string[] = [];
-
-        tags.forEach(tag => {
-            const lower = tag.toLowerCase();
-            if (groups[lower]) {
-                hasExpansion = true;
-                newTags.push(...groups[lower]);
-                toast.success(`Expanded group ${tag} to ${groups[lower].length} recipients`);
-            } else {
-                newTags.push(tag);
-            }
-        });
-
-        if (hasExpansion) {
-            updater(newTags);
-        }
-    };
-
-    return null; // Headless
+    return null;
 };
 
 export const MailGroupsClientExpansionDefinition = {
@@ -91,6 +55,50 @@ export const MailGroupsClientExpansionDefinition = {
             Component: MailGroupsSettings,
             title: 'Mail Groups',
             icon: Users
+        },
+        {
+            point: 'ON_RECIPIENTS_CHANGE_HANDLER',
+            priority: 'HIGH',
+            handler: async (payload: { to: string[], cc: string[], bcc: string[] }) => {
+                const session = await getSession();
+                const userId = session?.user?.email || 'default-user';
+
+                // Read from Secure Storage (hydrated by COMPOSER_INIT component)
+                const groups = await secureRead('mail-groups-data', userId) || {};
+
+                if (Object.keys(groups).length === 0) return payload;
+
+                let hasChanged = false;
+                const expandList = (tags: string[]) => {
+                    if (!tags) return [];
+                    const newTags: string[] = [];
+                    tags.forEach(tag => {
+                        const lower = tag.toLowerCase();
+                        const unprefixed = lower.startsWith('@') ? lower.slice(1) : lower;
+                        const prefixed = lower.startsWith('@') ? lower : '@' + lower;
+
+                        // Match exact, without @, or with @
+                        const matchKey = groups[lower] ? lower : (groups[unprefixed] ? unprefixed : (groups[prefixed] ? prefixed : null));
+
+                        if (matchKey) {
+                            hasChanged = true;
+                            newTags.push(...groups[matchKey]);
+                            toast.success(`Expanded group ${tag}`);
+                        } else {
+                            newTags.push(tag);
+                        }
+                    });
+                    return newTags;
+                };
+
+                const newPayload = {
+                    to: expandList(payload.to || []),
+                    cc: expandList(payload.cc || []),
+                    bcc: expandList(payload.bcc || [])
+                };
+
+                return hasChanged ? newPayload : payload;
+            }
         }
     ]
 };

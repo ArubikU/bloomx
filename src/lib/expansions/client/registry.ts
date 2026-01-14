@@ -4,6 +4,7 @@ class ClientExpansionRegistry {
     private expansions: Map<string, ClientExpansion> = new Map();
 
     register(expansion: ClientExpansion) {
+        console.log(`[Registry] Registering expansion: ${expansion.id}`);
         this.expansions.set(expansion.id, expansion);
     }
 

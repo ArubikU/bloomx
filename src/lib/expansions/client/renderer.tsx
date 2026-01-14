@@ -15,6 +15,7 @@ import { Popover } from '@/components/ui/Popover';
 
 export const ClientExpansions = ({ mountPoint, context }: ClientExpansionsProps) => {
     const expansions = clientExpansionRegistry.getByMountPoint(mountPoint);
+    console.log(`[Renderer] Rendering ${mountPoint} (Found ${expansions.length} components)`);
 
     // Responsive limit logic
     const [isMobile, setIsMobile] = useState(false);

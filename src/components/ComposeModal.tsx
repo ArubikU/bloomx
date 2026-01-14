@@ -352,6 +352,8 @@ export function ComposeModal({
     // Helper to run middleware chain
     const runMiddleware = async <T,>(mountPoint: 'ON_BODY_CHANGE_HANDLER' | 'ON_SUBJECT_CHANGE_HANDLER' | 'ON_RECIPIENTS_CHANGE_HANDLER', initialValue: T): Promise<T> => {
         const mounts = clientExpansionRegistry.getByMountPoint(mountPoint);
+        console.log(`[Middleware] Running ${mountPoint} (Found ${mounts.length} handlers)`);
+
         const sortedMounts = [...mounts].sort((a, b) => {
             const priorityWeight = { HIGH: 3, NORMAL: 2, LOW: 1, MONITOR: 0 };
             const pA = a.priority || 'NORMAL';
@@ -364,6 +366,7 @@ export function ComposeModal({
         for (const mount of sortedMounts) {
             if (mount.handler) {
                 try {
+                    console.log(`[Middleware] Executing ${mountPoint} handler from ${mount.id}`);
                     const result = await mount.handler(currentValue);
                     if (mount.priority === 'MONITOR') continue;
                     if (result !== undefined && result !== null) {
@@ -669,7 +672,7 @@ export function ComposeModal({
                         <div className="flex-1">
                             <TagInput
                                 value={toTags}
-                                onChange={setToTags}
+                                onChange={actions.setTo}
                                 placeholder=""
                                 className="border-none px-0 py-1.5"
                             />
@@ -690,13 +693,13 @@ export function ComposeModal({
                             <div className="flex items-start gap-2 border-b border-transparent focus-within:border-gray-200">
                                 <span className="text-sm font-medium text-gray-500 pt-2 w-8">Cc</span>
                                 <div className="flex-1">
-                                    <TagInput value={ccTags} onChange={setCcTags} className="border-none px-0 py-1.5" />
+                                    <TagInput value={ccTags} onChange={actions.setCc} className="border-none px-0 py-1.5" />
                                 </div>
                             </div>
                             <div className="flex items-start gap-2 border-b border-transparent focus-within:border-gray-200">
                                 <span className="text-sm font-medium text-gray-500 pt-2 w-8">Bcc</span>
                                 <div className="flex-1">
-                                    <TagInput value={bccTags} onChange={setBccTags} className="border-none px-0 py-1.5" />
+                                    <TagInput value={bccTags} onChange={actions.setBcc} className="border-none px-0 py-1.5" />
                                 </div>
                             </div>
                         </div>
@@ -708,7 +711,7 @@ export function ComposeModal({
                         className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-gray-400"
                         placeholder="Subject"
                         value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
+                        onChange={(e) => actions.setSubject(e.target.value)}
                     />
                 </div>
 
@@ -720,7 +723,7 @@ export function ComposeModal({
                         <Editor
                             ref={editorRef}
                             value={body}
-                            onChange={setBody}
+                            onChange={actions.setBody}
                             slashCommands={slashCommandsList}
                             context={contextProps}
                         />

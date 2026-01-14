@@ -20,7 +20,8 @@ const ComposerHelperComponent = ({ context }: ComposerHelperProps) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    prompt,
+                    emailContent: prompt,
+                    originalContent: context.emailContent, // Current draft body
                     subject: context.subject,
                     to: context.to?.join(', ')
                 })
