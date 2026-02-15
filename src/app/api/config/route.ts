@@ -11,7 +11,11 @@ export async function GET(req: Request) {
     const host = process.env.TOP_DOMAIN || req.headers.get('host');
 
     try {
-        const res = await fetch(`${backendUrl}/api/config`, {
+        // Send domain as query param to avoid proxy header stripping issues
+        const targetUrl = new URL(`${backendUrl}/api/config`);
+        if (host) targetUrl.searchParams.set('domain', host.split(':')[0]);
+
+        const res = await fetch(targetUrl.toString(), {
             headers: {
                 'x-forwarded-host': host || '',
                 'Cache-Control': 'no-cache'
