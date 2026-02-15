@@ -2,7 +2,6 @@
 import useSWR from 'swr';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
-
 export const DEFAULT_CONFIG = {
     name: process.env.NEXT_PUBLIC_BRAND_NAME || 'Bloom',
     displayName: process.env.NEXT_PUBLIC_BRAND_NAME || 'Bloom',
@@ -11,15 +10,22 @@ export const DEFAULT_CONFIG = {
         primaryColor: process.env.NEXT_PUBLIC_BRAND_COLOR || '#2563EB', // blue-600 default
     }
 };
-
 export function useDomainConfig() {
     const { data, error, isLoading } = useSWR('/api/config', fetcher, {
-        fallbackData: { config: DEFAULT_CONFIG },
-        revalidateOnFocus: false
+        revalidateOnFocus: true
     });
 
-    const config = data?.config ? { ...DEFAULT_CONFIG, ...data.config } : DEFAULT_CONFIG;
+    if (isLoading) {
+        return {
+            config: DEFAULT_CONFIG,
+            extensions: [],
+            isLoading: true,
+            isError: false
+        }
+    }
 
+    const config = data.config;
+    console.log(config)
     return {
         config,
         extensions: data?.extensions || [],
