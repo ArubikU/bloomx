@@ -25,7 +25,6 @@ export function useDomainConfig() {
     }
 
     const config = data.config;
-    console.log(config)
     return {
         config,
         extensions: data?.extensions || [],
