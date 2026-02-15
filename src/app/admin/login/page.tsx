@@ -5,7 +5,7 @@ import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Shield } from 'lucide-react';
-import { brand } from '@/lib/brand';
+
 
 function AdminLoginForm() {
     const router = useRouter();

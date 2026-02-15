@@ -4,9 +4,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Mail, Book } from 'lucide-react';
-import { brand } from '@/lib/brand';
+import { useDomainConfig } from '@/hooks/useDomainConfig';
 
 export default function Register() {
+    const { config } = useDomainConfig();
+    const brand = {
+        name: config.displayName || config.name,
+        logo: config.logo,
+        color: config.theme?.primaryColor
+    };
+
     const router = useRouter();
     const [data, setData] = useState({ name: '', email: '', password: '', key: '' });
     const [loading, setLoading] = useState(false);

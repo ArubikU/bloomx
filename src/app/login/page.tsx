@@ -5,9 +5,16 @@ import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Mail, Book } from 'lucide-react';
-import { brand } from '@/lib/brand';
+import { useDomainConfig } from '@/hooks/useDomainConfig';
 
 function LoginForm() {
+    const { config } = useDomainConfig();
+    const brand = {
+        name: config.displayName || config.name,
+        logo: config.logo,
+        color: config.theme?.primaryColor
+    };
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const registered = searchParams.get('registered');

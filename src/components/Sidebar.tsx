@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { brand } from '@/lib/brand';
+
 import { useSearchParams } from 'next/navigation';
 import { Inbox, File, Send, ArchiveX, Trash2, Archive, Plus, Tag, Check, X, Clock, Sparkles, LogOut, UserPlus, Settings, ChevronUp, MoreHorizontal } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -173,9 +173,9 @@ export function Sidebar({ onClose }: SidebarProps) {
     ];
 
     const { config: domainConfig } = useDomainConfig();
-    const brandName = domainConfig?.displayName || domainConfig?.name || brand.name;
-    const brandLogo = domainConfig?.logo || brand.logo;
-    const brandColor = domainConfig?.theme?.primaryColor || brand.color;
+    const brandName = domainConfig.displayName || domainConfig.name;
+    const brandLogo = domainConfig.logo;
+    const brandColor = domainConfig.theme?.primaryColor;
 
     return (
         <div className="flex h-full flex-col bg-muted/10 group">

@@ -1,12 +1,21 @@
+'use client';
+
 import Link from 'next/link';
 import { Book, Code, Component, Layers, ChevronRight, Home, Menu, Shield, Zap, Database } from 'lucide-react';
-import { brand } from '@/lib/brand';
+import { useDomainConfig } from '@/hooks/useDomainConfig';
 
 export default function DocsLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const { config } = useDomainConfig();
+    const brand = {
+        name: config.displayName || config.name,
+        logo: config.logo,
+        color: config.theme?.primaryColor
+    };
+
     return (
         <div className="min-h-screen bg-background font-sans flex flex-col">
             {/* Header */}
