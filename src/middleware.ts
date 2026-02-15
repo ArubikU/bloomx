@@ -7,6 +7,12 @@ export async function middleware(req: NextRequest) {
     const { pathname } = req.nextUrl;
 
     // 1. Define public paths (login, register, api auth routes, static files)
+
+    //if path is just "/" 
+    if (pathname === "/") {
+        return NextResponse.next();
+    }
+
     if (
         pathname.startsWith('/login') ||
         pathname.startsWith('/register') ||
