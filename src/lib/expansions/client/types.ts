@@ -5,7 +5,10 @@ export type ClientExpansionMountPoint =
     | 'COMPOSER_INIT' | 'COMPOSER_TOOLBAR' | 'EMAIL_HEADER' | 'SIDEBAR_FOOTER'
     | 'SETTINGS_TAB' | 'CUSTOM_SETTINGS_TAB' | 'SLASH_COMMAND' | 'EXTENSION_PAGE'
     | 'BEFORE_SEND_HANDLER'
-    | 'ON_BODY_CHANGE_HANDLER' | 'ON_SUBJECT_CHANGE_HANDLER' | 'ON_RECIPIENTS_CHANGE_HANDLER';
+    | 'ON_BODY_CHANGE_HANDLER' | 'ON_SUBJECT_CHANGE_HANDLER' | 'ON_RECIPIENTS_CHANGE_HANDLER'
+    | 'ON_OPEN_HANDLER' | 'ON_CLOSE_HANDLER'
+    | 'INBOX_BANNER' | 'EMAIL_BODY_FOOTER' | 'COMPOSE_FOOTER'
+    | 'CONTEXT_MENU' | 'NOTIFICATION' | 'PAGE';
 
 export type ExpansionPriority = 'HIGH' | 'NORMAL' | 'LOW' | 'MONITOR';
 
@@ -40,6 +43,12 @@ export interface ClientExpansionContext {
     close?: () => void;
     toast?: (message: string, type?: 'success' | 'error' | 'info') => void;
     showConfetti?: () => void;
+
+    // Secure Storage Access
+    secureSave?: (key: string, value: any) => Promise<void>;
+    secureLoad?: (key: string) => Promise<any | null>;
+    secureClear?: (key: string) => Promise<void>;
+
     [key: string]: any;
 }
 

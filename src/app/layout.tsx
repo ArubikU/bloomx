@@ -17,6 +17,7 @@ export const metadata: Metadata = {
 }
 
 import { ExpansionUIProvider } from '@/contexts/ExpansionUIContext';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export default function RootLayout({
     children,
@@ -31,7 +32,9 @@ export default function RootLayout({
                         <CacheProvider>
                             <OfflineProvider>
                                 <ExpansionUIProvider>
-                                    {children}
+                                    <ThemeProvider>
+                                        {children}
+                                    </ThemeProvider>
                                     <RealTimeListener />
                                     <ComposeWindows />
                                     <Toaster />

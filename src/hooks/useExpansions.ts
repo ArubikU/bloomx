@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ExpansionTrigger } from '@/lib/expansions/types';
+import { fetchExpansions } from '@/lib/expansions/api';
 
 export interface ExpansionMeta {
     id: string;
@@ -15,25 +15,22 @@ export interface ExpansionMeta {
     }>;
 }
 
-export function useExpansions(trigger: ExpansionTrigger) {
+export function useExpansions(trigger: string) {
     const [expansions, setExpansions] = useState<ExpansionMeta[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        async function fetchExpansions() {
+        async function loadExpansions() {
             try {
-                const res = await fetch(`/api/expansions?trigger=${trigger}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setExpansions(data);
-                }
+                const data = await fetchExpansions(trigger);
+                setExpansions(data);
             } catch (error) {
-                console.error('Failed to fetch expansions', error);
+                console.error('Failed to load expansions', error);
             } finally {
                 setLoading(false);
             }
         }
-        fetchExpansions();
+        loadExpansions();
     }, [trigger]);
 
     return { expansions, loading };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Archive, Trash2, Star, Tag } from 'lucide-react'; // Imports for icons
@@ -68,9 +68,8 @@ export function EmailList() {
         return subject.replace(/^((re|fwd|rv|enc|invitaci[oó]n|invitaci[oó]n actualizada|accepted|declined|tentative|cancelado|canceled|updated): ?)+/gi, '').trim();
     };
 
-    const groupedEmails = (() => {
+    const groupedEmails = useMemo(() => {
         const groups: { [key: string]: Email[] } = {};
-        const standalone: Email[] = [];
 
         filteredEmails.forEach(email => {
             const rawSubject = email.subject || '';
@@ -106,7 +105,7 @@ export function EmailList() {
         groupList.sort((a, b) => new Date(b.latestEmail.createdAt).getTime() - new Date(a.latestEmail.createdAt).getTime());
 
         return groupList;
-    })();
+    }, [filteredEmails]);
 
     // Advanced Search State
     const [showFilters, setShowFilters] = useState(false);
@@ -305,7 +304,7 @@ export function EmailList() {
         }
     };
 
-    const prefetchEmail = async (id: string) => {
+    const prefetchEmail = useCallback(async (id: string) => {
         // Match key with MailView
         const cacheKey = `email-${id}-thread-v2`;
         // Check if already in cache
@@ -321,7 +320,7 @@ export function EmailList() {
             // Siently fail for prefetch
             console.error('Prefetch failed', e);
         }
-    };
+    }, [getData, setData]);
 
     // Track previous nav state to avoid clearing on cache updates
     const prevFolder = useRef(folder);
@@ -353,7 +352,7 @@ export function EmailList() {
         }
     };
 
-    const handleSelect = (id: string) => {
+    const handleSelect = useCallback((id: string) => {
         if (folder === 'drafts') {
             // For drafts, open in Compose
             const draft = emails.find(e => e.id === id);
@@ -376,40 +375,45 @@ export function EmailList() {
         const params = new URLSearchParams(searchParams);
         params.set('id', id);
         router.push(`/?${params.toString()}`);
-    };
+    }, [folder, emails, openCompose, searchParams, router]);
 
-    const toggleSelection = (e: React.MouseEvent, id: string) => {
+    const toggleSelection = useCallback((e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        const newSelected = new Set(selectedIds);
+        // Use functional state update to avoid dependency on selectedIds
+        setSelectedIds(prev => {
+            const newSelected = new Set(prev);
+            // Note: lastSelectedId is tricky inside callback if we want to avoid dependency,
+            // but for shift-click we need it. Let's include lastSelectedId dependency.
 
-        if (e.shiftKey && lastSelectedId) {
-            const currentIndex = groupedEmails.findIndex(g => g.id === id);
-            const lastIndex = groupedEmails.findIndex(g => g.id === lastSelectedId);
-            const start = Math.min(currentIndex, lastIndex);
-            const end = Math.max(currentIndex, lastIndex);
+            // To properly handle shift-click with functional state, we likely need access to groupedEmails too.
+            // Since this function is complex and depends on many things, let's just use standard deps.
 
-            for (let i = start; i <= end; i++) {
-                // Select ALL emails in the group
-                groupedEmails[i].allEmails.forEach(email => newSelected.add(email.id));
-            }
-        } else {
-            const group = groupedEmails.find(g => g.id === id);
-            const idsToToggle = group ? group.allEmails.map(e => e.id) : [id];
+            if (e.shiftKey && lastSelectedId) {
+                const currentIndex = groupedEmails.findIndex(g => g.id === id);
+                const lastIndex = groupedEmails.findIndex(g => g.id === lastSelectedId);
+                const start = Math.min(currentIndex, lastIndex);
+                const end = Math.max(currentIndex, lastIndex);
 
-            // Check if ANY are selected (to toggle off) or if we are toggling on
-            // Actually usually if the main (latest) is selected, we deselect all.
-            // If main is not selected, we select all.
-            const isSelected = newSelected.has(id);
-
-            if (isSelected) {
-                idsToToggle.forEach(i => newSelected.delete(i));
+                for (let i = start; i <= end; i++) {
+                    // Select ALL emails in the group
+                    groupedEmails[i].allEmails.forEach(email => newSelected.add(email.id));
+                }
             } else {
-                idsToToggle.forEach(i => newSelected.add(i));
+                const group = groupedEmails.find(g => g.id === id);
+                const idsToToggle = group ? group.allEmails.map(e => e.id) : [id];
+
+                const isSelected = newSelected.has(id);
+
+                if (isSelected) {
+                    idsToToggle.forEach(i => newSelected.delete(i));
+                } else {
+                    idsToToggle.forEach(i => newSelected.add(i));
+                }
+                setLastSelectedId(id);
             }
-            setLastSelectedId(id);
-        }
-        setSelectedIds(newSelected);
-    };
+            return newSelected;
+        });
+    }, [groupedEmails, lastSelectedId]);
 
     const handleSelectAll = () => {
         if (selectedIds.size === filteredEmails.length && filteredEmails.length > 0) {
@@ -422,7 +426,7 @@ export function EmailList() {
 
     const { addToQueue, isOnline } = useOffline();
 
-    const handleBulkAction = async (updates: any) => {
+    const handleBulkAction = useCallback(async (updates: any) => {
         // Support explicit IDs passed in updates (for Swipe actions), otherwise use selectedIds
         const ids = updates.ids || Array.from(selectedIds);
 
@@ -432,7 +436,10 @@ export function EmailList() {
         const { ids: _explicitIds, ...actualUpdates } = updates;
 
         // Optimistic UI
-        const previousEmails = [...emails];
+        // We use functional update to be safe, but typically we want to trigger this AFTER state is updated.
+        // Actually here we depend on 'emails' and 'selectedIds' which change frequently.
+        // This is the hardest one to memoize effectively without refactoring to use reducers or refs.
+        // But let's try.
 
         setEmails(prev => prev.map(e => ids.includes(e.id) ? { ...e, ...actualUpdates } : e));
 
@@ -531,7 +538,21 @@ export function EmailList() {
             // Only keep this for offline/instant feedback if needed, 
             // but 'invalidate' is safer. Let's rely on invalidate for consistency.
         }
-    };
+    }, [selectedIds, folder, isOnline, router, invalidate, addToQueue]);
+
+    // Stable Swipe Handler
+    const handleSwipe = useCallback(async (id: string, updates: any) => {
+        // We find all emails in this thread/group to apply action to all
+        // We need 'groupedEmails' to be in dependency or utilize functional approach if possible
+        const group = groupedEmails.find(g => g.id === id);
+        if (group) {
+            const ids = group.allEmails.map(e => e.id);
+            await handleBulkAction({ ids, ...updates });
+        } else {
+            // Fallback if not grouped or found?
+            await handleBulkAction({ ids: [id], ...updates });
+        }
+    }, [groupedEmails, handleBulkAction]);
 
 
     // Remove duplicate filteredEmails declaration here since it was moved up
@@ -763,10 +784,7 @@ export function EmailList() {
                                         onSelect={handleSelect}
                                         onSelectToggle={toggleSelection}
                                         onPrefetch={prefetchEmail}
-                                        onSwipeAction={(updates: any) => {
-                                            // Apply to ALL in group
-                                            handleBulkAction({ ids: group.allEmails.map(e => e.id), ...updates });
-                                        }}
+                                        onSwipeAction={handleSwipe}
                                         badges={badges}
                                         folder={folder}
                                         threadCount={group.count}
@@ -829,7 +847,7 @@ export function EmailList() {
 }
 
 // Extracted Swipeable Component
-function SwipeableEmailItem({
+const SwipeableEmailItem = memo(function SwipeableEmailItem({
     email, index, isSelected, isFocused, selectedIds, onSelect, onSelectToggle, onPrefetch, onSwipeAction, badges, folder, threadCount
 }: any) {
     const [dragX, setDragX] = useState(0);
@@ -841,9 +859,9 @@ function SwipeableEmailItem({
         const offset = info.offset.x;
 
         if (offset > SWIPE_THRESHOLD) { // Swipe Right -> Archive
-            await onSwipeAction({ ids: [email.id], folder: 'archive' });
+            await onSwipeAction(email.id, { folder: 'archive' });
         } else if (offset < -SWIPE_THRESHOLD) { // Swipe Left -> Trash
-            await onSwipeAction({ ids: [email.id], folder: 'trash' });
+            await onSwipeAction(email.id, { folder: 'trash' });
         }
     };
 
@@ -923,7 +941,7 @@ function SwipeableEmailItem({
                     className="pt-1 shrink-0 z-20 cursor-pointer"
                     onClick={(e) => {
                         e.stopPropagation();
-                        onSwipeAction({ ids: [email.id], starred: !email.starred });
+                        onSwipeAction(email.id, { starred: !email.starred });
                     }}
                 >
                     <Star className={cn("h-5 w-5 transition-colors", email.starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-yellow-400")} />
@@ -987,4 +1005,22 @@ function SwipeableEmailItem({
             </motion.div>
         </div>
     );
-}
+}, (prevProps, nextProps) => {
+    const emailChanged =
+        prevProps.email.id !== nextProps.email.id ||
+        prevProps.email.read !== nextProps.email.read ||
+        prevProps.email.starred !== nextProps.email.starred ||
+        prevProps.email.subject !== nextProps.email.subject ||
+        prevProps.email.snippet !== nextProps.email.snippet ||
+        prevProps.email.createdAt !== nextProps.email.createdAt;
+
+    const selectionChanged =
+        prevProps.isSelected !== nextProps.isSelected ||
+        prevProps.selectedIds.has(prevProps.email.id) !== nextProps.selectedIds.has(nextProps.email.id);
+
+    const focusChanged = prevProps.isFocused !== nextProps.isFocused;
+
+    const threadChanged = prevProps.threadCount !== nextProps.threadCount;
+
+    return !emailChanged && !selectionChanged && !focusChanged && !threadChanged;
+});

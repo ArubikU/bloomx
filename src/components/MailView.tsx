@@ -9,12 +9,10 @@ import { formatDate, cn } from '@/lib/utils';
 import DOMPurify from 'isomorphic-dompurify';
 import { toast } from 'sonner';
 import { fetchDeduped } from '@/lib/fetchdedupe';
-import { ClientExpansions } from '@/lib/expansions/client/renderer';
-import { ensureClientExpansions } from '@/lib/expansions/client/core-expansions';
-ensureClientExpansions();
-import { ExpansionResult } from '@/lib/expansions/types';
+
 import * as Icons from 'lucide-react';
 import { SafeIframe } from './ui/SafeIframe';
+import { ExtensionLoader } from './expansions/ExtensionLoader';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ENABLE_THREAD_VIEW = true;
@@ -92,9 +90,23 @@ export function MailView() {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ read: true })
-                        }).then(() => {
-                            // Invalidate list cache so sidebar/list updates
-                            invalidate(`emails-${emailData.email.folder || 'inbox'}`);
+                        }).then(async () => {
+                            // Optimistically update the list cache to avoid full re-render
+                            const folder = emailData.email.folder || 'inbox';
+                            const listKey = `emails-${folder}`;
+                            const cachedList = await getData<any[]>(listKey);
+
+                            if (Array.isArray(cachedList)) {
+                                const idx = cachedList.findIndex((e: any) => e.id === emailData.email.id);
+                                if (idx !== -1) {
+                                    const newList = [...cachedList];
+                                    newList[idx] = { ...newList[idx], read: true };
+                                    // This triggers listeners (EmailList) but with specific data change
+                                    // Since EmailList is memoized, only the changed item re-renders
+                                    setCacheData(listKey, newList);
+                                }
+                            }
+
                             invalidate('stats-counts');
                         });
                         // Update cache with read status
@@ -261,11 +273,21 @@ export function MailView() {
             <div className="flex items-center gap-2 p-2 bg-background/95 backdrop-blur-sm sticky top-0 z-10 border-b">
                 <button onClick={() => router.push('/')} className="md:hidden p-2"><ArrowLeft className="h-5 w-5" /></button>
                 <div className="flex items-center gap-1">
+                    <button onClick={() => {
+                        const params = new URLSearchParams(searchParams);
+                        params.delete('id');
+                        router.push(`/?${params.toString()}`);
+                    }} className="p-2 hover:bg-muted rounded-md hidden md:block" title="Close"><X className="h-4 w-4" /></button>
+                    <div className="h-5 w-px bg-border mx-1 hidden md:block" />
+
                     <button onClick={() => handleUpdate({ folder: 'archive' })} className="p-2 hover:bg-muted rounded-md"><Archive className="h-4 w-4" /></button>
                     <button onClick={() => handleUpdate({ folder: 'spam' })} className="p-2 hover:bg-muted rounded-md"><ArchiveX className="h-4 w-4" /></button>
                     <button onClick={trashEmail} className="p-2 hover:bg-muted rounded-md"><Trash2 className="h-4 w-4" /></button>
                     <button onClick={handleReply} className="p-2 hover:bg-muted rounded-md"><Reply className="h-4 w-4 text-muted-foreground" /></button>
                     <button onClick={handleForward} className="p-2 hover:bg-muted rounded-md"><Forward className="h-4 w-4 text-muted-foreground" /></button>
+
+                    {/* JSON Extensions Toolbar */}
+                    <ExtensionLoader mountPoint="EMAIL_TOOLBAR" context={data?.email} />
                 </div>
                 <div className="h-5 w-px bg-border mx-1" />
                 <button onClick={() => handleUpdate({ starred: !data.email?.starred })} className={cn("p-2 hover:bg-muted rounded-md", data.email?.starred && "text-yellow-500")}>

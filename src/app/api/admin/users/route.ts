@@ -1,0 +1,77 @@
+
+import { NextRequest, NextResponse } from "next/server";
+import { verifyManagerSession } from "@/lib/manager-auth";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+
+// GET: List all users
+export async function GET(req: NextRequest) {
+    const manager = await verifyManagerSession(req);
+
+    if (!manager) {
+        console.log("[ADMIN_USERS_GET] Unauthorized Manager access attempt");
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                createdAt: true,
+                avatar: true,
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        return NextResponse.json(users);
+    } catch (error) {
+        console.error("[ADMIN_USERS_GET]", error);
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
+}
+
+// POST: Create a new user
+export async function POST(req: NextRequest) {
+    const manager = await verifyManagerSession(req);
+
+    if (!manager) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+        const { email, name, password } = await req.json();
+
+        if (!email || !password) {
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        }
+
+        const existingUser = await prisma.user.findUnique({
+            where: { email },
+        });
+
+        if (existingUser) {
+            return NextResponse.json({ error: "User already exists" }, { status: 409 });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = await prisma.user.create({
+            data: {
+                email,
+                name,
+                password: hashedPassword,
+            },
+        });
+
+        return NextResponse.json({
+            success: true,
+            user: { id: newUser.id, email: newUser.email, name: newUser.name },
+        });
+
+    } catch (error) {
+        console.error("[ADMIN_USERS_POST]", error);
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
+}

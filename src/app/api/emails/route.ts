@@ -18,12 +18,9 @@ export async function GET(req: NextRequest) {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Ensure core expansions are registered
-    // We cannot import directly at top level if registry uses 'require'? 
-    // registry.ts uses standard import/export.
-    // server.ts uses imports.
-    const { ensureCoreExpansions, expansionRegistry } = await import('@/lib/expansions/server');
-    ensureCoreExpansions();
+    // Local expansions removed.
+    // const { ensureCoreExpansions, expansionRegistry } = await import('@/lib/expansions/server');
+    // ensureCoreExpansions();
 
     // Lazy Unsnooze: Check for snoozed emails that need to wake up
     // We do this before fetching to ensure data is consistent
@@ -185,42 +182,7 @@ export async function POST(req: NextRequest) {
         // ----------------------------------------------------
         // MIDDLEWARE: Pre-Send Hooks
         // ----------------------------------------------------
-        const { ensureCoreExpansions, expansionRegistry } = await import('@/lib/expansions/server');
-        ensureCoreExpansions();
-
-        const preSendHooks = expansionRegistry.getAll()
-            .flatMap(e => e.intercepts)
-            .filter(i => i.trigger === 'EMAIL_PRE_SEND');
-
-        if (preSendHooks.length > 0) {
-            // Lazy load services
-            const { DefaultExpansionServices } = await import('@/lib/expansions/services');
-            const services = new DefaultExpansionServices();
-
-            const context = {
-                userId: user.id,
-                userEmail: sessionUser.email,
-                emailContent: html || text || '',
-                subject: subject,
-                to: to
-            };
-
-            for (const hook of preSendHooks) {
-                try {
-                    const result = await hook.execute(context, services as any);
-                    if (result.stop) {
-                        return NextResponse.json({
-                            error: result.message || 'Blocked by expansion policy',
-                            blocked: true
-                        }, { status: 400 });
-                    }
-                } catch (e) {
-                    console.error('Expansion Pre-Send Error', e);
-                    // Do we block on error? Let's say yes for safety in "DLP" context.
-                    return NextResponse.json({ error: 'Security Check Failed' }, { status: 500 });
-                }
-            }
-        }
+        // Local expansions removed.
         // ----------------------------------------------------
 
         // Prepare attachments for Resend
@@ -317,27 +279,7 @@ export async function POST(req: NextRequest) {
         // ----------------------------------------------------
         // MIDDLEWARE: Post-Send Hooks (Background)
         // ----------------------------------------------------
-        const postSendHooks = expansionRegistry.getAll()
-            .flatMap(e => e.intercepts)
-            .filter(i => i.trigger === 'EMAIL_POST_SEND');
-
-        if (postSendHooks.length > 0) {
-            // Lazy load services (reuse if possible, but new instance is fine)
-            const { DefaultExpansionServices } = await import('@/lib/expansions/services');
-            const services = new DefaultExpansionServices();
-
-            const context = {
-                userId: user.id,
-                userEmail: sessionUser.email,
-                emailId: email.id,
-                sentEmail: email
-            };
-
-            // Fire and forget (don't await loop to return response faster)
-            Promise.all(postSendHooks.map(hook =>
-                hook.execute(context, services as any).catch(e => console.error('Post-Send Hook Error', e))
-            ));
-        }
+        // Local expansions removed.
         // ----------------------------------------------------
 
         return NextResponse.json({ success: true, id: data?.id });

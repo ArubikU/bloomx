@@ -20,6 +20,7 @@ model User {
   emails    Email[]
   labels    Label[]
   accounts  Account[]
+  moltSessions MoltSession[]
 }
 
 model Account {
@@ -127,4 +128,20 @@ model Label {
 
   @@unique([userId, name])
   @@index([userId])
+}
+
+model MoltSession {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  accessToken   String   @unique // The token MoltBot sends with requests
+  refreshToken  String?  // Used to rotate access tokens
+  expiresAt     DateTime // When the access token expires
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([accessToken])
 }

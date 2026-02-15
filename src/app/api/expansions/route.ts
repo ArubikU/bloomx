@@ -1,87 +1,69 @@
+
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from "@/lib/session";
-import { ensureCoreExpansions, expansionRegistry } from '@/lib/expansions/server';
-import { ExpansionTrigger } from '@/lib/expansions/types';
+import { getCurrentUser } from '@/lib/session';
+import { cookies } from 'next/headers';
+import { COOKIE_NAME } from '@/lib/jwt';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://backend.bloomx.arubik.dev';
 
 export async function GET(req: NextRequest) {
     const user = await getCurrentUser();
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
 
     const { searchParams } = new URL(req.url);
     const trigger = searchParams.get('trigger');
-    ensureCoreExpansions();
 
-    let expansions = expansionRegistry.getAll();
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/expansions?trigger=${trigger}`, {
+            headers: {
+                'Authorization': `Bearer ${token || ''}`,
+                'X-User-ID': user.id,
+                'X-User-Email': user.email || ''
+            }
+        });
 
-    if (trigger) {
-        // manually filter by intercepts
-        expansions = expansions.filter(e =>
-            e.intercepts.some(i => i.trigger === trigger)
-        );
+        if (!res.ok) {
+            return NextResponse.json({ error: 'Backend error' }, { status: res.status });
+        }
+
+        const data = await res.json();
+        return NextResponse.json(data);
+    } catch (error) {
+        console.error("Proxy GET Error", error);
+        return NextResponse.json({ error: 'Failed to fetch expansions' }, { status: 500 });
     }
-
-    // Return only metadata safe for frontend
-    const metadata = expansions.map(e => ({
-        id: e.id,
-        name: e.name,
-        description: e.description,
-        icon: e.icon,
-        intercepts: e.intercepts.map(i => ({ type: i.type, trigger: i.trigger }))
-    }));
-
-    return NextResponse.json(metadata);
 }
 
 export async function POST(req: NextRequest) {
     const user = await getCurrentUser();
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { searchParams } = new URL(req.url);
-    const trigger = searchParams.get('trigger');
-
-    if (!trigger) {
-        return NextResponse.json({ error: 'Trigger required' }, { status: 400 });
-    }
-
-    ensureCoreExpansions();
-
-    // Find expansion that handles this trigger with API type
-    const expansions = expansionRegistry.getAll();
-    const handler = expansions
-        .flatMap(e => e.intercepts)
-        .find(i => i.trigger === trigger && i.type === 'API');
-
-    if (!handler) {
-        return NextResponse.json({ error: 'Handler not found' }, { status: 404 });
-    }
+    const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
 
     try {
         const body = await req.json();
 
-        // Context construction with payload
-        // Context construction with payload
-        const context: any = {
-            userId: user.id,
-            where: { email: user.email },
-            ...body // Flatten body into context
-        };
+        // Forward to backend execution endpoint
+        const res = await fetch(`${BACKEND_URL}/api/expansions/execute`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token || ''}`,
+                'X-User-ID': user.id,
+                'X-User-Email': user.email || ''
+            },
+            body: JSON.stringify(body)
+        });
 
-        // Initialize services
-        // Use require to avoid circular dependency issues at top-level if any, though here it's likely fine.
-        // Better to import DefaultExpansionServices properly.
-        const { DefaultExpansionServices } = require('@/lib/expansions/services');
-        const services = new DefaultExpansionServices();
+        const data = await res.json();
+        return NextResponse.json(data, { status: res.status });
 
-        const result = await handler.execute(context, services);
-        return NextResponse.json(result);
-
-    } catch (e: any) {
-        return NextResponse.json({ success: false, message: e.message || 'Internal Server Error' }, { status: 500 });
+    } catch (error) {
+        console.error("Proxy POST Error", error);
+        return NextResponse.json({ error: 'Failed to execute action' }, { status: 500 });
     }
 }
-
-

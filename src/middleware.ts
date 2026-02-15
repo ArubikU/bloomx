@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 import { verifyJWT, COOKIE_NAME } from "@/lib/jwt";
@@ -10,31 +11,46 @@ export async function middleware(req: NextRequest) {
         pathname.startsWith('/login') ||
         pathname.startsWith('/register') ||
         pathname.startsWith('/api/auth') || // Allow all auth routes
+        pathname.startsWith('/api/cron') || // Allow cron routes
+        pathname.startsWith('/api/config') || // Allow cron routes
+
+        pathname.startsWith('/api/webhooks') || // Allow cron routes
+        pathname.startsWith('/api/molt') || // Allow cron routes
+        pathname.startsWith('/SKILL') || // Allow cron routes
         pathname.startsWith('/_next') ||
-        pathname.startsWith('/static')
+        pathname.startsWith('/static') ||
+        pathname.startsWith('/api/admin') || // Allow admin APIs (auth handled in route)
+        pathname.startsWith('/admin') ||
+        pathname.startsWith('/docs')
     ) {
         return NextResponse.next();
     }
 
     try {
-        // 2. Manual Token Verification
+        // 2. Token Verification using custom JWT logic
         const token = req.cookies.get(COOKIE_NAME)?.value;
 
+        // console.log("[MIDDLEWARE] Checking token for:", pathname);
+
         if (!token) {
+            // console.log("[MIDDLEWARE] No token found");
             throw new Error("No token found");
         }
 
         const payload = await verifyJWT(token);
 
         if (!payload) {
+            console.log("[MIDDLEWARE] Verify failed for token");
             throw new Error("Invalid token");
         }
+
+        // console.log("[MIDDLEWARE] Valid token:", payload.email);
 
         // 3. Authorized
         return NextResponse.next();
 
     } catch (error) {
-        // console.error(`[MIDDLEWARE-ERROR] Token Verification Failed:`, error);
+        console.error(`[MIDDLEWARE-ERROR] Path: ${pathname}, Error:`, error);
         // On error, also redirect to login
         const url = req.nextUrl.clone();
         url.pathname = "/login";

@@ -10,11 +10,14 @@ import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 
 function DesktopLayout() {
+    const searchParams = useSearchParams();
+    const selectedId = searchParams.get('id');
+
     return (
         <div className="h-screen w-full hidden md:block">
             <Group orientation="horizontal" className="h-full">
                 {/* Panel Sidebar */}
-                <Panel defaultSize={20} minSize={15}>
+                <Panel defaultSize={20} minSize={15} maxSize={305}>
                     <Sidebar />
                 </Panel>
 
@@ -25,12 +28,16 @@ function DesktopLayout() {
                     <EmailList />
                 </Panel>
 
-                <Separator className="w-px bg-gray-200 hover:bg-blue-500 transition-colors cursor-col-resize active:bg-blue-600" />
+                {selectedId && (
+                    <>
+                        <Separator className="w-px bg-gray-200 hover:bg-blue-500 transition-colors cursor-col-resize active:bg-blue-600" />
 
-                {/* Panel Vista de Mensaje */}
-                <Panel defaultSize={48}>
-                    <MailView />
-                </Panel>
+                        {/* Panel Vista de Mensaje */}
+                        <Panel defaultSize={48} >
+                            <MailView />
+                        </Panel>
+                    </>
+                )}
             </Group>
         </div>
     );

@@ -9,8 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import { useExpansions } from '@/hooks/useExpansions';
 import { cn } from '@/lib/utils';
-import { ClientExpansions } from '@/lib/expansions/client/renderer';
-import { ensureClientExpansions } from '@/lib/expansions/client/core-expansions';
+import { ExtensionLoader } from './expansions/ExtensionLoader';
 import { CronTrigger } from '@/components/CronTrigger';
 import { useCompose } from '@/contexts/ComposeContext';
 import { useCache } from '@/contexts/CacheContext';
@@ -20,7 +19,6 @@ import { toast } from 'sonner';
 import { SettingsModal } from './SettingsModal';
 
 // Init
-ensureClientExpansions();
 
 interface SidebarProps {
     onClose?: () => void;
@@ -248,7 +246,7 @@ export function Sidebar({ onClose }: SidebarProps) {
                                         animate={{ scale: 1, opacity: 1 }}
                                         className={cn(
                                             "ml-auto text-xs font-semibold px-2 py-0.5 rounded-full",
-                                            isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                                            "bg-primary text-primary-foreground" // Always brand color for unread
                                         )}>
                                         {item.count}
                                     </motion.span>
@@ -265,7 +263,7 @@ export function Sidebar({ onClose }: SidebarProps) {
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Labels</span>
 
                     {/* Dynamic Header Actions */}
-                    <ClientExpansions mountPoint="SIDEBAR_HEADER" context={{}} />
+                    <ExtensionLoader mountPoint="SIDEBAR_HEADER" />
                 </div>
                 <button
                     onClick={() => setIsCreatingLabel(!isCreatingLabel)}
@@ -345,10 +343,7 @@ export function Sidebar({ onClose }: SidebarProps) {
             </div>
 
             {/* Client Expansions: Sidebar Footer */}
-            <ClientExpansions
-                mountPoint="SIDEBAR_FOOTER"
-                context={{}}
-            />
+            <ExtensionLoader mountPoint="SIDEBAR_FOOTER" />
 
             {/* User Profile / Settings stub - Hidden on Mobile */}
             <div className="p-4 mt-auto hidden md:block">

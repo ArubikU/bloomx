@@ -2,33 +2,48 @@
 
 import React, { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { clientExpansionRegistry } from '@/lib/expansions/client/registry';
 import { Loader2 } from 'lucide-react';
-import { ensureClientExpansions } from '@/lib/expansions/client/core-expansions';
-
-// Ensure expansions are registered
-ensureClientExpansions();
+import { useDomainConfig } from '@/hooks/useDomainConfig';
+import { JsonRenderer } from '@/components/expansions/renderer/JsonRenderer';
 
 interface ExtensionPageProps {
     params: Promise<{ slug: string[] }>;
 }
 
 function ExtensionContent({ slug }: { slug: string[] }) {
-    // 1. Reconstruct route path (e.g., ["decrypt"] -> "decrypt")
+    const { extensions, isLoading } = useDomainConfig();
     const routePath = slug.join('/');
 
-    // 2. Find matching extension
-    const extensions = clientExpansionRegistry.getByMountPoint('EXTENSION_PAGE');
-    const match = extensions.find(ext => ext.routePath === routePath);
+    if (isLoading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
 
-    if (!match || !match.Component) {
+    // Find extension with PAGE mount matching path
+    let match: any = null;
+
+    // Iterate extensions to find a matching PAGE mount
+    // Mount Schema: { point: 'PAGE', path: 'slug', component: ... }
+    for (const ext of extensions) {
+        if (!ext.template?.mounts) continue;
+        const pageMount = ext.template.mounts.find((m: any) =>
+            m.point === 'PAGE' && m.path === routePath
+        );
+        if (pageMount) {
+            match = { mount: pageMount, extensionId: ext.id };
+            break;
+        }
+    }
+
+    if (!match) {
         return notFound();
     }
 
-    const Component = match.Component;
-
-    // 3. Render
-    return <Component context={{}} />;
+    return (
+        <div className="container py-6">
+            <JsonRenderer
+                component={match.mount.component}
+                context={{ extensionId: match.extensionId }}
+            />
+        </div>
+    );
 }
 
 export default async function ExtensionPage({ params }: ExtensionPageProps) {

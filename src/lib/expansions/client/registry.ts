@@ -1,41 +1,44 @@
-import { ClientExpansion, ClientExpansionMountPoint, ExpansionPriority } from './types';
 
-class ClientExpansionRegistry {
-    private expansions: Map<string, ClientExpansion> = new Map();
+// This file is required by tsconfig to be present as a module?
+// Or maybe it was deleted but tsconfig still thinks it's there?
+// Let's create it as a placeholder or real registry if needed.
+// Based on file structure, this might be where we register default extensions.
 
-    register(expansion: ClientExpansion) {
-        console.log(`[Registry] Registering expansion: ${expansion.id}`);
-        this.expansions.set(expansion.id, expansion);
-    }
+import { ClientExpansion } from "./types";
 
-    getByMountPoint(mountPoint: ClientExpansionMountPoint): Array<{ id: string, Component?: React.ComponentType<any>, execute?: any, title?: string, icon?: any, slashCommand?: { key: string, description: string }, routePath?: string, handler?: any, priority?: ExpansionPriority }> {
-        const results: Array<{ id: string, Component?: React.ComponentType<any>, execute?: any, title?: string, icon?: any, slashCommand?: { key: string, description: string }, routePath?: string, handler?: any, priority?: ExpansionPriority }> = [];
+const registry: Map<string, ClientExpansion> = new Map();
 
-        const allExpansions = Array.from(this.expansions.values());
-        for (let i = 0; i < allExpansions.length; i++) {
-            const exp = allExpansions[i];
-            const mounts = exp.mounts.filter((m: any) => m.point === mountPoint);
 
-            for (const mount of mounts) {
-                results.push({
-                    id: exp.id,
-                    Component: mount.Component,
-                    execute: mount.execute,
-                    title: mount.title,
-                    icon: mount.icon,
-                    slashCommand: mount.slashCommand,
-                    routePath: mount.routePath,
-                    handler: mount.handler,
-                    priority: mount.priority
-                });
+export const clientExpansionRegistry = {
+    register: (expansion: ClientExpansion) => {
+        registry.set(expansion.id, expansion);
+    },
+    get: (id: string) => registry.get(id),
+    getAll: () => Array.from(registry.values()),
+    getByMountPoint: (point: string) => {
+        const expansions = Array.from(registry.values());
+        const mounts: any[] = [];
+        for (const exp of expansions) {
+            if (exp.mounts) {
+                for (const mount of exp.mounts) {
+                    if (mount.point === point) {
+                        mounts.push({ ...mount, expansionId: exp.id });
+                    }
+                }
             }
         }
-        return results;
+        return mounts;
     }
+};
 
-    getAll() {
-        return Array.from(this.expansions.values());
-    }
+export function registerClientExpansion(expansion: ClientExpansion) {
+    registry.set(expansion.id, expansion);
 }
 
-export const clientExpansionRegistry = new ClientExpansionRegistry();
+export function getClientExpansion(id: string): ClientExpansion | undefined {
+    return registry.get(id);
+}
+
+export function getAllClientExpansions(): ClientExpansion[] {
+    return Array.from(registry.values());
+}

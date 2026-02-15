@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation';
 import { X, Minimize2, Trash2, Maximize2, Loader2, Send, Paperclip, Clock, Sparkles, Mic } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCompose } from '@/contexts/ComposeContext';
-import { clientExpansionRegistry } from '@/lib/expansions/client/registry';
-import { ensureClientExpansions } from '@/lib/expansions/client/core-expansions';
+// Local expansions removed.
+// import { clientExpansionRegistry } from '@/lib/expansions/client/registry';
+// import { ensureClientExpansions } from '@/lib/expansions/client/core-expansions';
 // Initialize client expansions
-ensureClientExpansions();
+// ensureClientExpansions();
 import { useCache } from '@/contexts/CacheContext';
 import { cn } from '@/lib/utils';
 import { TagInput } from './ui/TagInput';
 import { Editor } from './Editor';
-import { ClientExpansions } from '@/lib/expansions/client/renderer';
-import { ClientExpansionContext } from '@/lib/expansions/client/types';
+import { ExtensionLoader } from '@/components/expansions/ExtensionLoader';
+// import { ClientExpansions } from '@/lib/expansions/client/renderer'; // Legacy
+import { ClientExpansionContext } from '@/lib/expansions/client/types'; // Legacy
 import { Popover } from './ui/Popover';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -210,40 +212,9 @@ export function ComposeModal({
         let finalBcc = bccTags;
         let finalSubject = subject;
 
-        // Execute Middleware - Look up DECLARATIVE handlers from registry
-        const mounts = clientExpansionRegistry.getByMountPoint('BEFORE_SEND_HANDLER');
-        const sortedMounts = [...mounts].sort((a, b) => {
-            const priorityWeight = { HIGH: 3, NORMAL: 2, LOW: 1, MONITOR: 0 };
-            const pA = a.priority || 'NORMAL';
-            const pB = b.priority || 'NORMAL';
-            return priorityWeight[pB] - priorityWeight[pA];
-        });
-
-        try {
-            for (const mount of sortedMounts) {
-                if (!mount.handler) continue;
-
-                const result = await mount.handler({
-                    to: finalTo,
-                    subject: finalSubject,
-                    body: finalBody,
-                    cc: finalCc,
-                    bcc: finalBcc
-                });
-
-                // Monitor priority handlers are read-only / cannot stop or modify
-                if (mount.priority === 'MONITOR') continue;
-
-                if (result?.stop) {
-                    console.log('Send intercepted/stopped by expansion');
-                    return;
-                }
-                if (result?.body) finalBody = result.body;
-            }
-        } catch (err) {
-            console.error('Middleware error', err);
-            return;
-        }
+        // Local expansions removed.
+        const mounts: any[] = []; // Placeholder
+        const sortedMounts: any[] = [];
 
         if (finalTo.length === 0) return; // Validate To field
 
@@ -350,38 +321,10 @@ export function ComposeModal({
     // --- Middleware (Event Interceptors) ---
 
     // Helper to run middleware chain
+    // Helper to run middleware chain
     const runMiddleware = async <T,>(mountPoint: 'ON_BODY_CHANGE_HANDLER' | 'ON_SUBJECT_CHANGE_HANDLER' | 'ON_RECIPIENTS_CHANGE_HANDLER', initialValue: T): Promise<T> => {
-        const mounts = clientExpansionRegistry.getByMountPoint(mountPoint);
-        console.log(`[Middleware] Running ${mountPoint} (Found ${mounts.length} handlers)`);
-
-        const sortedMounts = [...mounts].sort((a, b) => {
-            const priorityWeight = { HIGH: 3, NORMAL: 2, LOW: 1, MONITOR: 0 };
-            const pA = a.priority || 'NORMAL';
-            const pB = b.priority || 'NORMAL';
-            return priorityWeight[pB] - priorityWeight[pA];
-        });
-
-        let currentValue = initialValue;
-
-        for (const mount of sortedMounts) {
-            if (mount.handler) {
-                try {
-                    console.log(`[Middleware] Executing ${mountPoint} handler from ${mount.id}`);
-                    const result = await mount.handler(currentValue);
-                    if (mount.priority === 'MONITOR') continue;
-                    if (result !== undefined && result !== null) {
-                        if (typeof currentValue === 'object' && currentValue !== null && !Array.isArray(currentValue)) {
-                            currentValue = { ...currentValue, ...result };
-                        } else {
-                            currentValue = result;
-                        }
-                    }
-                } catch (e) {
-                    console.error(`Error in middleware ${mount.id}`, e);
-                }
-            }
-        }
-        return currentValue;
+        // Local expansions removed.
+        return initialValue;
     };
 
     // Define Actions separately to avoid TDZ (Temporal Dead Zone) issues
@@ -523,25 +466,8 @@ export function ComposeModal({
 
     const rightOffset = 24 + index * 40;
 
-    const slashCommandsList = clientExpansionRegistry.getByMountPoint('SLASH_COMMAND').map(mount => ({
-        ...(mount.slashCommand || {}),
-        key: mount.slashCommand?.key || 'unknown',
-        description: mount.slashCommand?.description || '',
-        execute: (args?: string) => {
-            if (mount.execute) {
-                // Ensure we pass 'close' matching the interface, and alias onClose if old key is used?
-                // The interface expects 'close'.
-                mount.execute({ ...contextProps, close: () => setActiveSlashComponent(null) });
-            } else if (mount.Component) {
-                // For slash commands handled internally by Editor, 
-                // this execute function serves as a signal that the command was chosen.
-            }
-        },
-        Component: mount.Component ? ((props: any) => {
-            const Comp = mount.Component!;
-            return <Comp context={contextProps} {...props} />;
-        }) : undefined
-    }));
+    const slashCommandsList: any[] = [];
+    // Local expansions removed.
 
     // ...
 
@@ -647,7 +573,7 @@ export function ComposeModal({
             </div>
 
             {/* Headless Init Expansions (Signatures, etc) */}
-            <ClientExpansions
+            <ExtensionLoader
                 mountPoint="COMPOSER_INIT"
                 context={contextProps}
             />
@@ -749,14 +675,10 @@ export function ComposeModal({
                 {/* Client Expansions Overlay */}
                 {showAiPrompt && (
                     <div className="absolute bottom-14 left-0 right-0 z-30">
-                        {clientExpansionRegistry.getByMountPoint('COMPOSER_OVERLAY').map(exp => (
-                            exp.Component && (
-                                <exp.Component
-                                    key={exp.id || 'unknown'}
-                                    context={{ ...contextProps, onClose: () => setShowAiPrompt(false) }}
-                                />
-                            )
-                        ))}
+                        <ExtensionLoader
+                            mountPoint="COMPOSER_OVERLAY"
+                            context={{ ...contextProps, onClose: () => setShowAiPrompt(false) }}
+                        />
                     </div>
                 )}
 
@@ -909,7 +831,7 @@ export function ComposeModal({
                             </button>
 
                             {/* Expansions (Toolbar) */}
-                            <ClientExpansions
+                            <ExtensionLoader
                                 mountPoint="COMPOSER_TOOLBAR"
                                 context={contextProps}
                             /></div>

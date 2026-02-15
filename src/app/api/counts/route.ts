@@ -18,58 +18,54 @@ export async function GET() {
         if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
         const [inboxCount, draftsCount, sentCount, trashCount, junkCount, archiveCount] = await Promise.all([
-            // Inbox: To me, not deleted, not archived, not junk
+            // Inbox: To me, not deleted, not archived, not junk, AND UNREAD
             prisma.email.count({
                 where: {
                     userId: dbUser.id,
                     folder: 'inbox',
+                    read: false
                 }
             }),
-            // Drafts
+            // Drafts (Keep as total, concept of unread draft is weird)
             prisma.draft.count({
-                where: { from: email } // Drafts seem to rely on 'from' in schema? Let's check schema. 
-                // Draft schema doesn't have userId yet?
-                // Wait, I didn't update Draft schema.
-                // Re-checking Drafts... Drafts usually are personal.
-                // Assuming 'from' matches user email is okay for now if Draft doesn't have userId?
-                // But strictly speaking better to add userId to Draft too?
-                // User requirement was Email and Label explicitly.
-                // I will stick to existing logic for Drafts unless I see an issue, 
-                // but Drafts schema uses `from`.
-                // Actually `Draft` model was shown in schema dump...
-                // ...
-                // model Draft { ... from String ... no userId ... }
-                // So I will leave Drafts as is (based on email) OR add userId to Draft too?
-                // Prudent to maintain same pattern. But 'from' is unique enough given correct auth?
-                // Let's stick to email for Drafts to minimize scope creep unless broken.
+                where: { from: email }
             }),
-            // Sent
+            // Sent (Unread sent emails? valid, maybe tracking if recipient read? no, local read status.)
+            // Usually "Sent" count in sidebar shows total or nothing. 
+            // User asked: "only show unread messages count". 
+            // For Sent, if I look at a sent email, it becomes read? 
+            // Let's assume yes, filter by read: false.
             prisma.email.count({
-                where: { userId: user.id, folder: 'sent' }
+                where: { userId: user.id, folder: 'sent', read: false }
             }),
             // Trash
             prisma.email.count({
                 where: {
                     userId: user.id,
-                    folder: 'trash'
+                    folder: 'trash',
+                    read: false
                 }
             }),
             // Junk
             prisma.email.count({
-                where: { userId: user.id, folder: 'spam' }
+                where: { userId: user.id, folder: 'spam', read: false }
             }),
             // Archive
             prisma.email.count({
-                where: { userId: user.id, folder: 'archive' }
+                where: { userId: user.id, folder: 'archive', read: false }
             })
         ]);
 
-        // Labels with counts
+        // Labels with counts (Unread only)
         const labels = await prisma.label.findMany({
             where: { userId: user.id },
             include: {
                 _count: {
-                    select: { emails: true }
+                    select: {
+                        emails: {
+                            where: { read: false }
+                        }
+                    }
                 }
             }
         });
