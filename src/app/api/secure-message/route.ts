@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
         await uploadToStorage(`secure/${id}.msg`, encryptedPayload, 'text/plain');
 
         // 4. Construct URL
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bloomx.arubik.dev';
         const viewUrl = `${baseUrl}/secure/${id}`;
 
         return NextResponse.json({ success: true, viewUrl });

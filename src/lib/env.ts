@@ -3,7 +3,7 @@ import { z } from 'zod';
 const envSchema = z.object({
     // Core
     DATABASE_URL: z.string().min(1, "Database URL is required"),
-    NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+    NEXT_PUBLIC_APP_URL: z.string().url().default("https://bloomx.arubik.dev"),
     REGISTRATION_KEY: z.string().default("dev-secret"),
 
     // Email Service (Resend)

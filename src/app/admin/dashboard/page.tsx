@@ -19,6 +19,7 @@ import {
     Lock
 } from 'lucide-react';
 import { useDomainConfig } from '@/hooks/useDomainConfig';
+import { ThemePreview } from '@/components/admin/ThemePreview';
 
 interface Extension {
     id: string;
@@ -55,24 +56,48 @@ export default function AdminDashboard() {
         secondaryColor: '#ffffff',
         backgroundColor: '#f9fafb',
         textColor: '#111827',
-        accentColor: '#4f46e5'
+        accentColor: '#d8d8e5ff',
+        mutedColor: '#f3f4f6',
+        borderColor: '#e5e7eb',
+        cardColor: '#ffffff',
+        titleFont: 'Inter',
+        bodyFont: 'Inter'
     });
     const [savingSettings, setSavingSettings] = useState(false);
 
     useEffect(() => {
-        if (domainConfig) {
-            setSettings({
-                name: domainConfig.name || '',
-                displayName: domainConfig.displayName || domainConfig.name || '',
-                logo: domainConfig.logo || '',
-                primaryColor: domainConfig.theme?.primaryColor || '#000000',
-                secondaryColor: domainConfig.theme?.secondaryColor || '#ffffff',
-                backgroundColor: domainConfig.theme?.backgroundColor || '#f9fafb',
-                textColor: domainConfig.theme?.textColor || '#111827',
-                accentColor: domainConfig.theme?.accentColor || '#4f46e5'
-            });
-        }
-    }, [domainConfig]);
+        const fetchDomainSettings = async () => {
+            try {
+                const res = await fetch('/api/admin/domain');
+                if (res.ok) {
+                    const domainData = await res.json();
+                    setSettings({
+                        name: domainData.name || '',
+                        displayName: domainData.displayName || domainData.name || '',
+                        logo: domainData.logo || '',
+                        primaryColor: domainData.theme?.primaryColor || '#000000',
+                        secondaryColor: domainData.theme?.secondaryColor || '#ffffff',
+                        backgroundColor: domainData.theme?.backgroundColor || '#f9fafb',
+                        textColor: domainData.theme?.textColor || '#111827',
+                        accentColor: domainData.theme?.accentColor || '#4f46e5',
+                        mutedColor: domainData.theme?.mutedColor || '#f3f4f6',
+                        borderColor: domainData.theme?.borderColor || '#e5e7eb',
+                        cardColor: domainData.theme?.cardColor || '#ffffff',
+                        titleFont: domainData.theme?.titleFont || 'Inter',
+                        bodyFont: domainData.theme?.bodyFont || 'Inter'
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to fetch domain settings", error);
+            }
+        };
+
+        fetchDomainSettings();
+    }, []);
+
+
+
+
 
     useEffect(() => {
         if (activeTab === 'users') fetchUsers();
@@ -149,7 +174,12 @@ export default function AdminDashboard() {
                         secondaryColor: settings.secondaryColor,
                         backgroundColor: settings.backgroundColor,
                         textColor: settings.textColor,
-                        accentColor: settings.accentColor
+                        accentColor: settings.accentColor,
+                        mutedColor: settings['mutedColor' as keyof typeof settings],
+                        borderColor: settings['borderColor' as keyof typeof settings],
+                        cardColor: settings['cardColor' as keyof typeof settings],
+                        titleFont: settings['titleFont' as keyof typeof settings],
+                        bodyFont: settings['bodyFont' as keyof typeof settings]
                     }
                 })
             });
@@ -483,188 +513,139 @@ export default function AdminDashboard() {
                 )}
 
                 {activeTab === 'settings' && (
-                    <div className="max-w-2xl">
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
-                            <h2 className="text-xl font-semibold text-gray-900 mb-6">General Settings</h2>
-                            <form onSubmit={handleSaveSettings} className="space-y-6">
+                    <div className="flex flex-col xl:flex-row gap-8">
+                        {/* Left: Form */}
+                        <div className="flex-1 max-w-2xl">
+                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-6">General Settings</h2>
+                                <form onSubmit={handleSaveSettings} className="space-y-6">
 
-                                {/* Technical Domain - Read Only */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Server Domain (Immutable)
-                                    </label>
-                                    <div className="flex items-center gap-2 relative">
-                                        <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    {/* Technical Domain */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Server Domain (Immutable)
+                                        </label>
+                                        <div className="flex items-center gap-2 relative">
+                                            <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={settings.name}
+                                                readOnly
+                                                className="w-full pl-9 pr-4 py-2 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg outline-none cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Public Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Public Name
+                                        </label>
                                         <input
                                             type="text"
-                                            value={settings.name}
-                                            readOnly
-                                            className="w-full pl-9 pr-4 py-2 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg outline-none cursor-not-allowed"
+                                            value={settings.displayName}
+                                            onChange={(e) => setSettings({ ...settings, displayName: e.target.value })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                         />
                                     </div>
-                                    <p className="mt-2 text-xs text-gray-400">This is your assigned technical domain and cannot be changed.</p>
-                                </div>
 
-                                {/* Public Name */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Public Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={settings.displayName}
-                                        onChange={(e) => setSettings({ ...settings, displayName: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                                        placeholder="e.g. My Awesome SaaS"
-                                    />
-                                    <p className="mt-2 text-sm text-gray-500">This name will appear in emails, branding, and dashboard headers.</p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Logo URL
-                                    </label>
-                                    <div className="flex gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Logo URL</label>
                                         <input
                                             type="url"
                                             value={settings.logo}
                                             onChange={(e) => setSettings({ ...settings, logo: e.target.value })}
-                                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                                            placeholder="https://..."
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                         />
-                                        {settings.logo && (
-                                            <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
-                                                <img src={settings.logo} alt="Preview" className="w-full h-full object-cover" />
-                                            </div>
-                                        )}
                                     </div>
-                                    <p className="mt-2 text-sm text-gray-500">Publicly accessible URL for your logo.</p>
-                                </div>
 
-                                <hr className="my-6 border-gray-100" />
-                                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
-                                    <Palette className="w-5 h-5" /> Theme Configuration
-                                </h3>
+                                    <hr className="my-6 border-gray-100" />
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Primary Color */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Primary Color
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="color"
-                                                value={settings.primaryColor}
-                                                onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
-                                                className="h-10 w-12 p-1 rounded border border-gray-300 cursor-pointer"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={settings.primaryColor}
-                                                onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
-                                            />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                                        <Palette className="w-5 h-5" /> Theme Configuration
+                                    </h3>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Title Font</label>
+                                            <select
+                                                value={(settings as any).titleFont || 'Inter'}
+                                                onChange={(e) => setSettings({ ...settings, titleFont: e.target.value } as any)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            >
+                                                <option value="Inter">Inter (Default)</option>
+                                                <option value="Arial">Arial</option>
+                                                <option value="Helvetica">Helvetica</option>
+                                                <option value="Times New Roman">Times New Roman</option>
+                                                <option value="Georgia">Georgia</option>
+                                                <option value="Courier New">Courier New</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Body Font</label>
+                                            <select
+                                                value={(settings as any).bodyFont || 'Inter'}
+                                                onChange={(e) => setSettings({ ...settings, bodyFont: e.target.value } as any)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            >
+                                                <option value="Inter">Inter (Default)</option>
+                                                <option value="Arial">Arial</option>
+                                                <option value="Helvetica">Helvetica</option>
+                                                <option value="Times New Roman">Times New Roman</option>
+                                                <option value="Georgia">Georgia</option>
+                                                <option value="Courier New">Courier New</option>
+                                            </select>
                                         </div>
                                     </div>
 
-                                    {/* Secondary Color */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Secondary Color
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="color"
-                                                value={settings.secondaryColor}
-                                                onChange={(e) => setSettings({ ...settings, secondaryColor: e.target.value })}
-                                                className="h-10 w-12 p-1 rounded border border-gray-300 cursor-pointer"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={settings.secondaryColor}
-                                                onChange={(e) => setSettings({ ...settings, secondaryColor: e.target.value })}
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
-                                            />
-                                        </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {Object.entries(settings)
+                                            .filter(([key]) => key.includes('Color'))
+                                            .map(([key, value]) => (
+                                                <div key={key}>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
+                                                        {key.replace('Color', '').replace(/([A-Z])/g, ' $1').trim()}
+                                                    </label>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="color"
+                                                            value={value as string}
+                                                            onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
+                                                            className="h-10 w-12 p-1 rounded border border-gray-300 cursor-pointer"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={value as string}
+                                                            onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
+                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
                                     </div>
 
-                                    {/* Background Color */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Background Color
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="color"
-                                                value={settings.backgroundColor}
-                                                onChange={(e) => setSettings({ ...settings, backgroundColor: e.target.value })}
-                                                className="h-10 w-12 p-1 rounded border border-gray-300 cursor-pointer"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={settings.backgroundColor}
-                                                onChange={(e) => setSettings({ ...settings, backgroundColor: e.target.value })}
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
-                                            />
-                                        </div>
+                                    <div className="pt-6 border-t border-gray-100 flex justify-end">
+                                        <button
+                                            type="submit"
+                                            disabled={savingSettings}
+                                            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                                        >
+                                            {savingSettings ? <Loader2 className="animate-spin w-4 h-4" /> : <Save className="w-4 h-4" />}
+                                            Save Changes
+                                        </button>
                                     </div>
+                                </form>
+                            </div>
+                        </div>
 
-                                    {/* Text Color */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Text Color
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="color"
-                                                value={settings.textColor}
-                                                onChange={(e) => setSettings({ ...settings, textColor: e.target.value })}
-                                                className="h-10 w-12 p-1 rounded border border-gray-300 cursor-pointer"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={settings.textColor}
-                                                onChange={(e) => setSettings({ ...settings, textColor: e.target.value })}
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Accent Color */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Accent Color
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="color"
-                                                value={settings.accentColor}
-                                                onChange={(e) => setSettings({ ...settings, accentColor: e.target.value })}
-                                                className="h-10 w-12 p-1 rounded border border-gray-300 cursor-pointer"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={settings.accentColor}
-                                                onChange={(e) => setSettings({ ...settings, accentColor: e.target.value })}
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-
-                                <div className="pt-6 border-t border-gray-100 flex justify-end">
-                                    <button
-                                        type="submit"
-                                        disabled={savingSettings}
-                                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 shadow-sm hover:shadow"
-                                    >
-                                        {savingSettings ? <Loader2 className="animate-spin w-4 h-4" /> : <Save className="w-4 h-4" />}
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </form>
+                        {/* Right: Preview */}
+                        <div className="flex-1 lg:max-w-md sticky top-8 h-fit">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Live Preview</h3>
+                            <ThemePreview settings={settings} />
+                            <p className="mt-4 text-sm text-gray-500">
+                                This preview approximates how your theme will look in the Mail application.
+                                Some OS-specific rendering may vary.
+                            </p>
                         </div>
                     </div>
                 )}

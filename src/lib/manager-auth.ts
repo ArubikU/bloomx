@@ -10,7 +10,7 @@ export async function verifyManagerSession(req: NextRequest) {
     }
 
     try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://backend.bloomx.arubik.dev' || "http://localhost:3001";
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://backend.bloomx.arubik.dev';
         const res = await fetch(`${backendUrl}/api/auth/me`, {
             headers: {
                 Cookie: `auth_session=${sessionCookie.value}`

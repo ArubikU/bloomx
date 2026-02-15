@@ -17,6 +17,7 @@ import { useSession } from '@/components/SessionProvider';
 import { AccountManager, StoredAccount } from '@/lib/account-manager';
 import { toast } from 'sonner';
 import { SettingsModal } from './SettingsModal';
+import { useDomainConfig } from '@/hooks/useDomainConfig';
 
 // Init
 
@@ -171,24 +172,29 @@ export function Sidebar({ onClose }: SidebarProps) {
         { name: 'Archive', icon: Archive, id: 'archive', count: counts.archive },
     ];
 
+    const { config: domainConfig } = useDomainConfig();
+    const brandName = domainConfig?.displayName || domainConfig?.name || brand.name;
+    const brandLogo = domainConfig?.logo || brand.logo;
+    const brandColor = domainConfig?.theme?.primaryColor || brand.color;
+
     return (
         <div className="flex h-full flex-col bg-muted/10 group">
             {/* Account / Compose */}
             <div className="flex px-4 py-4 items-center justify-between">
                 <div className="flex items-center gap-2 text-primary font-bold text-lg tracking-tight">
-                    {brand.logo ? (
-                        <img src={brand.logo} alt={brand.name} className="h-7 w-7 rounded-lg object-contain" />
+                    {brandLogo ? (
+                        <img src={brandLogo} alt={brandName} className="h-7 w-7 rounded-lg object-contain" />
                     ) : (
                         <div
                             className="h-7 w-7 text-primary-foreground rounded-lg flex items-center justify-center transition-colors"
-                            style={{ backgroundColor: brand.color }}
+                            style={{ backgroundColor: brandColor }}
                         >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
                         </div>
                     )}
-                    <span>{brand.name}</span>
+                    <span>{brandName}</span>
                 </div>
                 {/* Mobile Close Button */}
                 {onClose && (
